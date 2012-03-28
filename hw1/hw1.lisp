@@ -20,8 +20,8 @@
       (read-images '("car_eagle.png" 
 		     "car_filtered.png" 
 		     "eagle_filtered.png"
-		     "car_filtered_half.png"
-		     "eagle_filtered_half.png"))
+		     "car_filtered_half2.png"
+		     "eagle_filtered_half2.png"))
     (setf *mixed* mixed
 	  *img1* img1
 	  *img2* img2
@@ -62,7 +62,7 @@
     (loop for j from -1 to 1 do
 	 (loop for i from -1 to 1 do
 	      (setf values (cons (aref data (+ x i) (+ y j)) values))))
-    values))
+    (reverse values)))
 
 (defun filtered-value (x y)
   (let ((i1 (image-data *img1*))
@@ -145,10 +145,14 @@
 
     ;; Solve least square solution
     (let* ((src-tp (mtp src))
-	   (k (m* src-tp src))
-	   (k-inv (minv k))
-	   (q (m* k-inv src-tp)))
-      (list (m* q dst) w h))))
+	   (src-tp-inv (minv (m* src-tp src)))
+	   (q (m* src-tp-inv src-tp))
+	   (solution (m* q dst)))
+
+      #-nil
+      (write-png-file "verification.png" (cmat->mat (m* src solution) w-2 h-2))
+      
+      (list solution w h))))
 	   
 
 (defun clamp (x min max)
