@@ -108,10 +108,17 @@
 
 (defun solve-eq (A b)
   "Solving linear equation Ax=b"
-  (if (= (rows A) (cols A))
-      (m* (minv A) b)
-      (let ((A-tp (mtp A)))
-	(m* (m* (minv (m* A-tp A)) A-tp) b))))
+  (let ((x 
+	 (if (= (rows A) (cols A))
+	     (m* (minv A) b)
+	     (let ((A-tp (mtp A)))
+	       #+nil
+	       (format t "Unknow ~A variables, ~A equations~%" (cols A) (rows A))
+	       (m* (m* (minv (m* A-tp A)) A-tp) b)))))
+    ;; Verification
+    #+nil
+    (format t "~A == ~A~%" (m* A x) b)
+    x))
 
 
 ;; Finding filter
@@ -177,15 +184,7 @@
 	(setf (mref dst row 0) (aref data x y))))
 
     ;; Solve least square solution
-    (let* ((src-tp (mtp src))
-	   (src-tp-inv (minv (m* src-tp src)))
-	   (q (m* src-tp-inv src-tp))
-	   (solution (m* q dst)))
-
-      (write-png-file "verification.png" (cmat->mat (m* src solution) w-2 h-2))
-      (write-png-file "original.png" (cmat->mat dst w-2 h-2))
-      
-      (list solution w h))))
+    (list (solve-eq src dst) w h)))
 	   
 
       
@@ -214,7 +213,7 @@
 (defun result ()
   (let* ((h (find-filter))
 	 (a (cmat->arr h)))
-    (format t "Question a : ~A" a)
+    (format t "Question a : ~A~%" a)
 
     
     ;; Reconstruct img1
