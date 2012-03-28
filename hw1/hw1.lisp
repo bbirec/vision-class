@@ -200,8 +200,8 @@
       (read-images '("car_eagle.png" 
 		     "car_filtered.png" 
 		     "eagle_filtered.png"
-		     "car_filtered_part.png"
-		     "eagle_filtered_part.png"))
+		     "car_filtered_half2.png"
+		     "eagle_filtered_half2.png"))
     (setf *mixed* mixed
 	  *img1* img1
 	  *img2* img2
@@ -215,9 +215,11 @@
 	 (a (cmat->arr h)))
     (format t "Question a : ~A~%" a)
 
+    (labels ((save (filename img)
+	       (destructuring-bind (img w h) (reconstruction img a)
+		 (write-png-file filename (cmat->mat img w h)))))
+      (save "output1.png" *img1-half*)
+      (save "output2.png" *img2-half*))))
     
-    ;; Reconstruct img1
-    (destructuring-bind (img w h) (reconstruction *img1-half* a)
-      (setf *original-1* img)
-      (write-png-file "output1.png" (cmat->mat img w h)))))
+
 	
