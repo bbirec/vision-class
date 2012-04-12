@@ -7,14 +7,11 @@
 (defparameter *path* "/Users/bbirec/Dropbox/Classes/vision/hw2/")
 
 ;; Image load & write
-(defparameter *img1* (read-png-file
-		      (concatenate 'string *path* "view1.png")))
-(defparameter *img2* (read-png-file
-		      (concatenate 'string *path* "view2.png")))
 
-(defun img-matrix (img)
+(defun load-image (filename)
   "Converting the input image to matrix form"
-  (let* ((data (image-data img))
+  (let* ((img (read-png-file (concatenate 'string *path* filename)))
+	 (data (image-data img))
 	 (w (width img))
 	 (h (height img))
 	 (mat-R (make-float-matrix w h))
@@ -25,7 +22,9 @@
 	      (setf (matrix-ref mat-R x y) (aref data x y 0))
 	      (setf (matrix-ref mat-G x y) (aref data x y 1))
 	      (setf (matrix-ref mat-B x y) (aref data x y 2))))
-    (values mat-R mat-G mat-B)))
+    (list mat-R mat-G mat-B)))
+
+
 
 
 (defun clamp (x min max)
@@ -100,22 +99,22 @@
   [4/256 16/256 24/256 16/256 4/256]'
   [1/256 4/256 6/256 4/256 1/256]'])
 
-(defparameter *filter-gradient-x* 
+(defparameter *filter-sobel-x* 
   [[-1/8 0 1/8]'
   [-2/8 0 2/8]'
   [-1/8 0 1/8]'])
 
-(defparameter *filter-gradient-y*
+(defparameter *filter-sobel-y*
   [[-1/8 -2/8 -1/8]'
   [0 0 0]'
   [1/8 2/8 1/8]'])
 	      
 ;; Convolution
 
-(defun conv-2d (img-matrix filter-matrix)
+(defun conv-2d (img filter)
   "2D image convolution operation"
-  (let* ((is (size img-matrix))
-	 (fs (size filter-matrix))
+  (let* ((is (size img))
+	 (fs (size filter))
 	 (diff (floor (/ (car fs) 2)))
 	 (offset (- diff))
 	 (offset2 (* offset 2))
@@ -134,8 +133,8 @@
 	    (loop for fy from 0 below (cadr fs) do
 		 (loop for fx from 0 below (car fs) do
 		      (setf value (+ value 
-				     (* (matrix-ref filter-matrix fy fx)
-					(matrix-ref img-matrix 
+				     (* (matrix-ref filter fy fx)
+					(matrix-ref img 
 						    (+ ix fy offset) 
 						    (+ iy fx offset)))))))
 	    ;; Output matrix
@@ -145,13 +144,40 @@
 
   
 ;; Applying 2d linear image
-(defun filter-2d (filename img filter)
-  (multiple-value-bind (r g b) (img-matrix img)
-    (write-image filename 
-		 (conv-2d r filter)
-		 (conv-2d g filter)
-		 (conv-2d b filter))))
-  
+(defun filter-2d (img &rest filter)
+  (destructuring-bind (r g b) img
+    (loop for f in filter do
+	 (setf r (conv-2d r f))
+	 (setf g (conv-2d g f))
+	 (setf b (conv-2d b f)))
+    (list r g b)))
 
 
-  
+
+(defun filter-2d-save (filename img &rest filter)
+  (destructuring-bind (r g b) (apply #'filter-2d (cons img filter))
+    (write-image filename r g b)))
+
+
+
+
+
+
+;; Generating DoG image
+(defun gen-dog-images (img)
+  (let* ((smoothed (filter-2d img *filter-gaussian*))
+	 (sobel-x (filter-2d smoothed *filter-sobel-x*))
+	 (sobel-y (filter-2d smoothed *filter-sobel-y*)))
+    (list sobel-x sobel-y)))
+
+
+
+
+(defparameter *img1* (load-image "view1.png"))
+(defparameter *img2* (load-image "view2.png"))
+
+
+(defun gen-images ()
+  (destructuring-bind (dx dy) (gen-dog-images *img1*)
+    (write-image "img1_dx.png" (first dx) (second dx) (third dx))
+    (write-image "img1_dy.png" (first dy) (second dy) (third dy))))
