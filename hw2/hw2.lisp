@@ -85,9 +85,8 @@
 		 
 		 (let* ((A (make-A-matrix))
 			(B (m* (transpose A) A)))
-		   (multiple-value-bind (V-t D V) (svd B :A) 
-		     (declare (ignore D) (ignore V))
-		     V-t
+		   (multiple-value-bind (V-t _D _V) (svd B :A) 
+		     (declare (ignore _D) (ignore _V))
 		     (m* V-t (transpose [0 0 0 0 0 0 0 0 1])))))
       (error "Need 4 correspondences")))
       
