@@ -92,8 +92,13 @@
       
 
 
-;;  linear filters
-(defparameter *filter-gaussian*  [1/16 4/16 6/16 4/16 1/16])
+;; Linear filters
+(defparameter *filter-gaussian* 
+  [[1/256 4/256 6/256 4/256 1/256]'
+  [4/256 16/256 24/256 16/256 4/256]'
+  [6/256 24/256 36/256 24/256 6/256]'
+  [4/256 16/256 24/256 16/256 4/256]'
+  [1/256 4/256 6/256 4/256 1/256]'])
 
 (defparameter *filter-gradient-x* 
   [[-1/8 0 1/8]'
@@ -107,9 +112,46 @@
 	      
 ;; Convolution
 
-(defun convolution (A B))
+(defun conv-2d (img-matrix filter-matrix)
+  "2D image convolution operation"
+  (let* ((is (size img-matrix))
+	 (fs (size filter-matrix))
+	 (diff (floor (/ (car fs) 2)))
+	 (offset (- diff))
+	 (offset2 (* offset 2))
+	 (output (make-float-matrix (+ (car is) offset2)
+				    (+ (cadr is) offset2))))
+	 
+    ;; Filter should be odd size
+    (assert (and (oddp (car fs)) (oddp (cadr fs))))
 
+    (loop for iy from diff below (+ (cadr is) offset) do
+       (loop for ix from diff below (+ (car is) offset) do
+	    
+	    ;; Loop filter values
+	    (let ((value 0))
+	    
+	    (loop for fy from 0 below (cadr fs) do
+		 (loop for fx from 0 below (car fs) do
+		      (setf value (+ value 
+				     (* (matrix-ref filter-matrix fy fx)
+					(matrix-ref img-matrix 
+						    (+ ix fy offset) 
+						    (+ iy fx offset)))))))
+	    ;; Output matrix
+	    (setf (matrix-ref output (+ ix offset) (+ iy offset))
+		  value))))
+    output))
 
+  
+;; Applying 2d linear image
+(defun filter-2d (filename img filter)
+  (multiple-value-bind (r g b) (img-matrix img)
+    (write-image filename 
+		 (conv-2d r filter)
+		 (conv-2d g filter)
+		 (conv-2d b filter))))
+  
 
 
   
