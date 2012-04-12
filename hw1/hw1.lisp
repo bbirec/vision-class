@@ -3,7 +3,7 @@
 
 (in-package #:hw1)
 
-(defparameter *path* "/Users/bbirec/Desktop/Classes/vision/hw1/")
+(defparameter *path* "/Users/bbirec/Dropbox/Classes/vision/hw1/")
 (defvar *mixed* nil)
 (defvar *img1* nil)
 (defvar *img2* nil)
