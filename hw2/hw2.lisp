@@ -1,11 +1,22 @@
 (defpackage #:hw2
-  (:use #:cl #:png-read #:matlisp))
+  (:use :cl :png-read :matlisp)
+  (:shadow :real))
 
 (in-package #:hw2)
 
 (defparameter *path* "/Users/bbirec/Dropbox/Classes/vision/hw2/")
 
+;; Image load
+(defparameter *img1* (read-png-file
+		      (concatenate 'string *path* "view1.png")))
+(defparameter *img2* (read-png-file
+		      (concatenate 'string *path* "view2.png")))
 
+(defun img-matrix (img)
+  (let ((data (image-data img))
+	(w (width img))
+	(h (height img)))
+    
 
 ;; Matlisp
 
@@ -47,4 +58,24 @@
       
 
 
+;;  linear filters
+(defparameter *filter-gaussian*  [1/16 4/16 6/16 4/16 1/16])
 
+(defparameter *filter-gradient-x* 
+  [[-1/8 0 1/8]'
+  [-2/8 0 2/8]'
+  [-1/8 0 1/8]'])
+
+(defparameter *filter-gradient-y*
+  [[-1/8 -2/8 -1/8]'
+  [0 0 0]'
+  [1/8 2/8 1/8]'])
+	      
+;; Convolution
+
+(defun convolution (A B))
+
+
+
+
+  
