@@ -6,17 +6,52 @@
 
 (defparameter *path* "/Users/bbirec/Dropbox/Classes/vision/hw2/")
 
-;; Image load
+;; Image load & write
 (defparameter *img1* (read-png-file
 		      (concatenate 'string *path* "view1.png")))
 (defparameter *img2* (read-png-file
 		      (concatenate 'string *path* "view2.png")))
 
 (defun img-matrix (img)
-  (let ((data (image-data img))
-	(w (width img))
-	(h (height img)))
-    
+  "Converting the input image to matrix form"
+  (let* ((data (image-data img))
+	 (w (width img))
+	 (h (height img))
+	 (mat-R (make-float-matrix w h))
+	 (mat-G (make-float-matrix w h))
+	 (mat-B (make-float-matrix w h)))
+    (loop for y from 0 below h do
+	 (loop for x from 0 below w do
+	      (setf (matrix-ref mat-R x y) (aref data x y 0))
+	      (setf (matrix-ref mat-G x y) (aref data x y 1))
+	      (setf (matrix-ref mat-B x y) (aref data x y 2))))
+    (values mat-R mat-G mat-B)))
+
+
+(defun clamp (x min max)
+  (if (< x min) min
+      (if (> x max) max x)))
+
+(defun conv-8-bit (v)
+  (round (clamp v 0.0 255.0)))
+
+(defun write-image (filename mat-R mat-G mat-B)
+  (let* ((s (size mat-R))
+	 (w (car s))
+	 (h (cadr s))
+	 (png (make-instance 'zpng:png
+			    :color-type :truecolor
+			    :width w
+			    :height h))
+	 (image (zpng:data-array png)))
+    (loop for y from 0 below h do
+	 (loop for x from 0 below w do
+	      (setf (aref image y x 0) (conv-8-bit (matrix-ref mat-R x y)))
+	      (setf (aref image y x 1) (conv-8-bit (matrix-ref mat-G x y)))
+      	      (setf (aref image y x 2) (conv-8-bit (matrix-ref mat-B x y)))))
+    (zpng:write-png png (concatenate 'string *path* filename))))
+			    
+
 
 ;; Matlisp
 
