@@ -199,10 +199,35 @@
 (defparameter *dog-img1* (gen-dog-images *img1*))
 (defparameter *dog-img2* (gen-dog-images *img2*))
 
+(defun msub (mat x y w h)
+  "Getting a rectangluar region of given matrix."
+  (assert (and (>= x 0) (>= y 0)
+	       (>= w 1) (>= h 1)
+	       (<= (+ x w) (cadr (size mat)))
+	       (<= (+ y h) (car (size mat)))))
+
+  (let ((m (make-float-matrix h w)))
+    (loop for my from 0 below h do
+	 (loop for mx from 0 below w do
+	      (setf (matrix-ref m mx my)
+		    (matrix-ref mat (+ mx x) (+ my y)))))
+    m))
+
+(defun msub-center (mat x y size)
+  "Getting the subset of matrix where the position is centered."
+  (assert (and (>= size 1) (oddp size)))
+  (let* ((diff (floor (/ size 2)))
+	 (mx (- x diff))
+	 (my (- y diff)))
+    (msub mat mx my size size)))
+	 
 
 ;; 1. Extracting three patches
-(defun extracting-patch (img x y size)
-  (loop for y from 0 below size do
-       (loop for x from 0 below size do
-	    
-	    (matrix-ref img x y))))
+(defun find-corner (img-x img-y x y)
+  (let ((ix (msub-center img-x x y *patch-size*))
+	(iy (msub-center img-y x y *patch-size*)))
+    (let ((ix2 (m.* ix ix))
+	  (iy2 (m.* iy iy))
+	  (ixiy (m.* ix iy)))
+      ;; Applying the larger gaussian for each matrix
+      
