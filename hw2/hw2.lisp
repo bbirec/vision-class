@@ -93,21 +93,27 @@
 
 ;; Linear filters
 (defparameter *filter-gaussian* 
-  [[1/256 4/256 6/256 4/256 1/256]'
-  [4/256 16/256 24/256 16/256 4/256]'
-  [6/256 24/256 36/256 24/256 6/256]'
-  [4/256 16/256 24/256 16/256 4/256]'
-  [1/256 4/256 6/256 4/256 1/256]'])
+  [
+  [1/256 4/256 6/256 4/256 1/256];
+  [4/256 16/256 24/256 16/256 4/256];
+  [6/256 24/256 36/256 24/256 6/256];
+  [4/256 16/256 24/256 16/256 4/256];
+  [1/256 4/256 6/256 4/256 1/256];
+  ])
 
 (defparameter *filter-sobel-x* 
-  [[-1/8 0 1/8]'
-  [-2/8 0 2/8]'
-  [-1/8 0 1/8]'])
+  [
+  [-1/8 0 1/8];
+  [-2/8 0 2/8];
+  [-1/8 0 1/8];
+  ])
 
 (defparameter *filter-sobel-y*
-  [[-1/8 -2/8 -1/8]'
-  [0 0 0]'
-  [1/8 2/8 1/8]'])
+  [
+  [-1/8 -2/8 -1/8];
+  [0 0 0];
+  [1/8 2/8 1/8];
+  ])
 	      
 ;; Convolution
 
@@ -180,4 +186,23 @@
 (defun gen-images ()
   (destructuring-bind (dx dy) (gen-dog-images *img1*)
     (write-image "img1_dx.png" (first dx) (second dx) (third dx))
-    (write-image "img1_dy.png" (first dy) (second dy) (third dy))))
+    (write-image "img1_dy.png" (first dy) (second dy) (third dy)))
+  (destructuring-bind (dx dy) (gen-dog-images *img2*)
+    (write-image "img2_dx.png" (first dx) (second dx) (third dx))
+    (write-image "img2_dy.png" (first dy) (second dy) (third dy))))
+
+
+;; Finding corner based on the point picked manually.
+
+
+(defparameter *patch-size* 9)
+(defparameter *dog-img1* (gen-dog-images *img1*))
+(defparameter *dog-img2* (gen-dog-images *img2*))
+
+
+;; 1. Extracting three patches
+(defun extracting-patch (img x y size)
+  (loop for y from 0 below size do
+       (loop for x from 0 below size do
+	    
+	    (matrix-ref img x y))))
