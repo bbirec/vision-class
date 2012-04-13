@@ -256,5 +256,15 @@
 	       (ld-y (matrix-ref result 1)))
 	  ;; Harris Corner Detector
 	  (- (* ld-x ld-y) (* 0.06 (+ ld-x ld-y) (+ ld-x ld-y))))))))
-	  
+
+(defun rgb->grayscale (img)
+  (m./ (m.+ (m.+ (car img) (cadr img)) (caddr img)) 3))
+
+(defun has-corner? (dog-img x y)
+  (let ((R (harris-corner-detector (rgb->grayscale (first dog-img))
+				   (rgb->grayscale (second dog-img))
+				   x y 9 2)))
+    (> R 1)))
+  
+  
 	 
