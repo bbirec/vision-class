@@ -264,7 +264,7 @@
   (let ((R (harris-corner-detector (rgb->grayscale (first dog-img))
 				   (rgb->grayscale (second dog-img))
 				   x y 9 2)))
-    (> R 1)))
+    (values (> R 1) R)))
   
   
 	 
