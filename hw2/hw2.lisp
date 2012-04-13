@@ -220,14 +220,41 @@
 	 (mx (- x diff))
 	 (my (- y diff)))
     (msub mat mx my size size)))
+
+(defun gaussian-filter (size sigma)
+  "Sample the gaussian in matrix form."
+  (assert (oddp size))
+  (let ((matrix (make-float-matrix size size))
+	(diff (floor (/ size 2))))
+    (loop for y from 0 below size do
+	 (loop for x from 0 below size do
+	      (let ((fx (- x diff))
+		    (fy (- y diff)))
+		(setf (matrix-ref matrix x y)
+		      (/ (exp (- (/ (+ (* fx fx) (* fy fy))
+				    (* 2 sigma sigma))))
+			 (* 2 pi sigma sigma))))))
+    matrix))
 	 
 
-;; 1. Extracting three patches
-(defun find-corner (img-x img-y x y)
-  (let ((ix (msub-center img-x x y *patch-size*))
-	(iy (msub-center img-y x y *patch-size*)))
+(defun harris-corner-detector (img-x img-y x y patch-size sigma)
+  "Check whether the patch has corner or not."
+  (let ((ix (msub-center img-x x y patch-size))
+	(iy (msub-center img-y x y patch-size)))
     (let ((ix2 (m.* ix ix))
 	  (iy2 (m.* iy iy))
-	  (ixiy (m.* ix iy)))
+	  (ixiy (m.* ix iy))
+	  (gf (gaussian-filter patch-size sigma)))
       ;; Applying the larger gaussian for each matrix
-      
+      (let ((v-ix2 (sum (m.* ix2 gf)))
+	    (v-iy2 (sum (m.* iy2 gf)))
+	    (v-ixiy (sum (m.* ixiy gf))))
+	(let* ((result (svd 
+			[[v-ix2 v-ixiy];
+			[v-ixiy v-iy2]]))
+	       (ld-x (matrix-ref result 0))
+	       (ld-y (matrix-ref result 1)))
+	  ;; Harris Corner Detector
+	  (- (* ld-x ld-y) (* 0.06 (+ ld-x ld-y) (+ ld-x ld-y))))))))
+	  
+	 
