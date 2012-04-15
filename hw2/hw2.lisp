@@ -91,6 +91,13 @@
       (error "Need at least 4 correspondences")))
       
 
+(defun normalize-matrix (mat)
+  (assert (square-matrix-p mat))
+  (let ((s (matrix-ref mat 
+		       (- (car (size mat)) 1)
+		       (- (car (size mat)) 1))))
+    (m/ mat s)))
+		       
 
 ;; Linear filters
 (defparameter *filter-gaussian* 
