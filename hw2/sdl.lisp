@@ -58,18 +58,49 @@
   (gl:disable :texture-2d)
   (rectangle x y w h 0 0 1 1 color))
 
+(defun draw-2d-texture (tex x y w h u1 v1 u2 v2 &optional (color '(1 1 1)))
+  (gl:enable :texture-2d)
+  (gl:bind-texture :texture-2d tex)
+  (rectangle x y w h u1 v1 u2 v2 color))
 
-(defun draw ()
+
+(defun load-texture-from-img (img)
+  (let* ((texture (car (gl:gen-textures 1)))
+	 (iw (car (size (car img))))
+	 (ih (cadr (size (car img))))
+	 (texture-format :rgb) ;; rgb
+	 (data (make-array (* iw ih 3) 
+			   :element-type 'unsigned-byte
+			   :initial-element 100)))
+    ;; Prepare the texture data from image matrix
+    (loop for y from 0 below ih do
+	 (loop for x from 0 below iw do
+	      (let ((pos (* (+ (* y iw) x) 3)))
+		(setf (aref data pos) (conv-8-bit (matrix-ref (car img) x y)))
+		(setf (aref data (+ pos 1)) (conv-8-bit (matrix-ref (cadr img) x y)))
+		(setf (aref data (+ pos 2)) (conv-8-bit (matrix-ref (caddr img) x y))))))
+    
+    
+    (gl:bind-texture :texture-2d texture)
+    (gl:tex-parameter :texture-2d :texture-min-filter :linear)
+    
+    
+    (gl:tex-image-2d :texture-2d 0 :rgba
+		     iw ih
+		     0
+		     texture-format
+		     :unsigned-byte data)
+    texture))
+  
+    
+
+(defun draw (width height tex)
   (setup-draw)
 
   (gl:load-identity)
 
-  (gl:mult-matrix #(1 0 0 0 0 1 0 0 0 0 1 0 100 100 0 1))
-  
-  #+nil
-  (gl:translate 100 100 0)
-
-  (draw-2d-rect 0 0 100 100 '(1 0 0))
+  (gl:translate (/ width 2) (/ height 2) 0)
+  (draw-2d-texture tex 0 0 width height 0 0 1 1)
   
   (gl:flush)
   (sdl:update-display))
@@ -88,12 +119,13 @@
 		  :opengl-attributes '((:SDL-GL-DOUBLEBUFFER 1)))
     
       (setup-ortho-projection width height)
-    
+
+      (let ((tex (load-texture-from-img img)))
 
       (sdl:with-events ()
 	(:quit-event () t)
 	(:video-expose-event () (sdl:update-display))
 	(:mouse-button-down-event (:x x :y y) (format t "Click: (~A,~A)~%" x y))
-	(:idle () (draw) (slime-conn))))))
+	(:idle () (draw width height tex) (slime-conn)))))))
 
 	 
