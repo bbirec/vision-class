@@ -105,7 +105,7 @@
 	    (loop for i from 0 below 30 collect
 	      (let ((v1 (random 500))
 		    (v2 (random 500)))
-	      (list (list v1 v2 1) (list v1 v2 1)))))))
+	      (list (list v1 v2 1) (list (+ v1 100) v2 1)))))))
     (values h (normalize-matrix h))))
 
 ;; Linear filters

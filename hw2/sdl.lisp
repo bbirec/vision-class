@@ -54,6 +54,25 @@
       (apply 'gl:color c)
       (gl:vertex x1 y2 0))))
 
+(defun rectangle2 (p1 p2 p3 p4 &optional 
+		   (u1 0) (v1 0) (u2 1) (v2 1) (c '(1 1 1)))
+  (gl:with-primitive :quads
+    (gl:tex-coord u1 v2)
+    (apply 'gl:color c)
+    (gl:vertex (car p1) (cadr p1) 0)
+
+    (gl:tex-coord u2 v2)
+    (apply 'gl:color c)
+    (gl:vertex (car p2) (cadr p2) 0)
+
+    (gl:tex-coord u2 v1)
+    (apply 'gl:color c)
+    (gl:vertex (car p3) (cadr p3) 0)
+
+    (gl:tex-coord u1 v1)
+    (apply 'gl:color c)
+    (gl:vertex (car p4) (cadr p4) 0)))
+
 (defun draw-line (p1 p2 color)
   (gl:disable :texture-2d)
   (apply 'gl:color color)
@@ -144,12 +163,12 @@
   (with-slots (pt1 pt2 color) landmark
     (when pt1
 	(draw-point 
-	 (list (car pt1) (- (height i1) (cadr pt1))) 
+	 (list (car pt1) (cadr pt1))
 	 color size))
     (gl:translate (width i1) 0 0)
     (when pt2
       (draw-point 
-       (list (car pt2) (- (height i1) (cadr pt2)))
+       (list (car pt2) (cadr pt2))
        color size))))
     
       
@@ -169,13 +188,18 @@
     (setf *cur-landmark* (make-instance 'landmark :color (rand-color))))
   
   (if (< x (width i1))
-      (setf (pt1 *cur-landmark*) (list x y))
-      (setf (pt2 *cur-landmark*) (list (- x (width i1)) y)))
+      (setf (pt1 *cur-landmark*) (list x (- (height i1) y)))
+      (setf (pt2 *cur-landmark*) (list (- x (width i1)) (- (height i1) y))))
 
   ;; When the landmark is filled, push to the list
   (when (and (pt1 *cur-landmark*) (pt2 *cur-landmark*))
       (push *cur-landmark* *landmarks*)
-      (setf *cur-landmark* nil)))
+      (setf *cur-landmark* nil))
+
+  ;; If the points are collected, compute the homography matrix
+  (when (>= (length *landmarks*) 4)
+    (compute-homography (get-points-from-landmarks))
+    (compute-transformed-vertices (get-points-from-landmarks))))
 
 (defun make-image (img)
   (make-instance 'image 
@@ -211,15 +235,43 @@
 
       ;; Draw transformed image
       (gl:push-matrix)
+      #+nil
       (when *homography* 
 
+	(gl:load-matrix *homography*)
 
-	(gl:mult-matrix *homography*)
-	;(gl:mult-matrix #(2 0 0 0 0 2 0 0 0 0 2 0 100 0 0 2))
-	(draw-2d-rect 0 0 w1 h1 '(1 0 0))
 	#+nil
+	(gl:mult-matrix #(2 0 0 0 0 2 0 0 0 0 2 0 100 0 0 2))
+
+
+	(draw-2d-rect 0 0 w1 h1 '(1 0 0))
+
 	(draw-2d-texture tex1 0 0 w1 h1 0 0 1 1))
-      (gl:pop-matrix)))
+      (gl:pop-matrix)
+      
+      ;; Test draw
+      (when *transformed-vertices*
+	  (gl:push-matrix)
+	  (gl:enable :texture-2d)
+	  (gl:bind-texture :texture-2d tex1)
+
+	  (gl:translate (- (/ w2 2)) (- (/ h2 2)) 0)
+
+	  #+nil
+	  (rectangle2 '(10 10)
+		      '(100 20)
+		      '(100 100)
+		      '(0 100))
+
+	  #+nil
+	  (rectangle2 '(-437 356)
+		      '(-808 28)
+		      '(8184 -173)
+		      '(1127 723))
+
+	  (apply #'rectangle2 *transformed-vertices*)
+	  
+	  (gl:pop-matrix))))
 
   (gl:pop-matrix)
 
@@ -284,11 +336,6 @@
 	     (list (append (pt1 l) '(1)) 
 		   (append (pt2 l) '(1))))))
 
-(defvar *gl-points* nil)
-(defun get-gl-points ()
-  (setf *gl-points* (loop for (p1 p2) in *points*
-	  collect (list (list (car p1) (- 576 (cadr p1)) (caddr p1))
-			(list (car p2) (- 576 (cadr p2)) (caddr p2))))))
 
 (defun 2D->3D-transfom (2d-mat)
   "Convert the 2D transform matrix to 3D transform matrix"
@@ -315,7 +362,7 @@
 
 (defun compute-homography (points)
   (let ((H (2D->3D-transfom 
-	    (solve-homography-matrix points))))
+	    (normalize-matrix (solve-homography-matrix points)))))
     (values (setf *homography* (3D-transform->arr H)) H)))
 
 (defun normalize-vector (vec)
@@ -324,6 +371,25 @@
 (defun test-homography (points)
   (multiple-value-bind (arr H) (compute-homography points)
     (format t "H: ~A~%" H)
-    (format t "H * 0: ~A~%" (normalize-vector (m* H [0 0 0 1]')))))
+    (format t "H * 0: ~A~%" (normalize-vector (m* H [0 0 0 1]')))
+    (format t "H * 0: ~A~%" (normalize-vector (m* H [720 0 0 1]')))
+    (format t "H * 0: ~A~%" (normalize-vector (m* H [0 576 0 1]')))
+    (format t "H * 0: ~A~%" (normalize-vector (m* H [720 576 0 1]')))))
 
 
+
+(defvar *transformed-vertices* nil)
+
+(defun conv-to-point (vec)
+  (let ((l (coerce (convert-to-lisp-array vec) 'list)))
+    (list (car l) (cadr l))))
+
+(defun compute-transformed-vertices (points)
+  (let ((H (solve-homography-matrix points)))
+    (setf *transformed-vertices*
+    (list 
+     (conv-to-point (normalize-vector (m* H [0 0 1]')))
+     (conv-to-point (normalize-vector (m* H [720 0 1]')))
+     (conv-to-point (normalize-vector (m* H [720 576 1]')))
+     (conv-to-point (normalize-vector (m* H [0 576 1]')))))))
+  
