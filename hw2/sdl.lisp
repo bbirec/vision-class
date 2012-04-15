@@ -190,17 +190,37 @@
 
 
   ;; Draw images
+  
   (gl:push-matrix)
   (gl:load-identity)
-  (with-slots (tex width height) i1
-    (gl:translate (/ width 2) (/ height 2) 0)
-    (draw-2d-texture tex 0 0 width height 0 0 1 1)
-    (gl:translate (/ width 2) 0 0))
-  
-  (with-slots (tex width height) i2
-    (gl:translate (/ width 2) 0 0)
-    (draw-2d-texture tex 0 0 width height 0 0 1 1))
+
+  (with-slots ((tex1 tex) (w1 width) (h1 height)) i1
+    (with-slots ((tex2 tex) (w2 width) (h2 height)) i2
+
+      ;; Draw image 1
+      (gl:translate (/ w1 2) (/ h1 2) 0)
+      (draw-2d-texture tex1 0 0 w1 h1 0 0 1 1)
+
+      ;; Draw transformed image
+      (gl:push-matrix)
+      (when *homography* 
+	(gl:mult-matrix *homography*)
+
+      #+nil
+      (draw-2d-rect 0 0 w2 h2 '(1 0 0))
+      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1))
+      (gl:pop-matrix)
+
+      ;; Draw image 2
+
+      (gl:translate (/ w1 2) 0 0)
+
+      (gl:translate (/ w2 2) 0 0)
+      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1)))
+
   (gl:pop-matrix)
+
+
 
   ;; Draw landmarks
   (gl:push-matrix)
@@ -216,16 +236,6 @@
     (gl:pop-matrix))
 
 
-  ;; Draw transformed image
-  (when *homography* 
-    (gl:push-matrix)
-    (gl:load-identity)
-
-    (gl:load-matrix *homography*)
-
-    (draw-2d-rect 0 0 (width i2) (height i2) '(1 0 0))
-  
-    (gl:pop-matrix))
 
   (gl:flush)
   (sdl:update-display))
@@ -268,7 +278,14 @@
 (defun get-points-from-landmarks ()
   (setf *points* 
 	(loop for l in *landmarks* collect
-	   (list (append (pt1 l) '(1)) (append (pt2 l) '(1))))))
+	     (list (append (pt1 l) '(1)) 
+		   (append (pt2 l) '(1))))))
+
+(defvar *gl-points* nil)
+(defun get-gl-points ()
+  (setf *gl-points* (loop for (p1 p2) in *points*
+	  collect (list (list (car p1) (- 576 (cadr p1)) (caddr p1))
+			(list (car p2) (- 576 (cadr p2)) (caddr p2))))))
 
 (defun 2D->3D-transfom (2d-mat)
   "Convert the 2D transform matrix to 3D transform matrix"
@@ -288,15 +305,15 @@
     (setf (matrix-ref 3d-mat 2 2) 1)
     3d-mat))
 
-(defun 3D-transform->list (mat)
-  (coerce (convert-to-lisp-array (reshape mat 16 1)) 'list))
+(defun 3D-transform->arr (mat)
+  (convert-to-lisp-array (reshape mat 16 1)))
     
 (defvar *homography* nil)
 
-(defun compute-homography ()
-  (setf *homography* (3D-transform->list
+(defun compute-homography (points)
+  (setf *homography* (3D-transform->arr
 		      (2D->3D-transfom 
-		       (solve-homography-matrix *points*)))))
+		       (solve-homography-matrix points)))))
 
 
 
