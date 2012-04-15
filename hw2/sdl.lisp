@@ -1,7 +1,7 @@
 (in-package #:hw2)
 
 
-;; Using SDL to interacte with user
+;; Using SDL to interact with user to get correspodence points.
 ;; Getting points to compute the homography matrix.
 ;; Representing the stitched image in 3D space with OpenGL.
 
@@ -91,41 +91,100 @@
 		     texture-format
 		     :unsigned-byte data)
     texture))
-  
-    
 
-(defun draw (width height tex)
+
+
+
+(defclass image ()
+  ((tex :initarg :tex
+	:accessor tex)
+   (mat :initarg :mat
+	:accessor mat)
+   (width :initarg :width
+	  :accessor width)
+   (height :initarg :height
+	   :accessor height)))
+
+
+(defclass landmark ()
+  ((pt1 :initarg :pt1
+	:initform nil
+	:accessor pt1)
+   (pt2 :initarg :pt2
+	:initform nil
+	:accessor pt2)
+   (color :initarg :color
+	  :accessor color))
+  (:documentation "Indicating the correspondence pair points"))
+
+
+(defvar *cur-landmark* nil)
+(defvar *landmarks* nil)
+
+(defun click-handler (x y))
+  
+
+(defun make-image (img)
+  (make-instance 'image 
+		 :tex (load-texture-from-img img)
+		 :mat img
+		 :width (car (size (car img)))
+		 :height (cadr (size (car img)))))
+
+(defun draw (i1 i2)
   (setup-draw)
 
   (gl:load-identity)
 
-  (gl:translate (/ width 2) (/ height 2) 0)
-  (draw-2d-texture tex 0 0 width height 0 0 1 1)
+  (gl:push-matrix)
+
+  (with-slots (tex width height) i1
+    (gl:translate (/ width 2) (/ height 2) 0)
+    (draw-2d-texture tex 0 0 width height 0 0 1 1)
+    (gl:translate (/ width 2) 0 0))
+  
+  (with-slots (tex width height) i2
+    (gl:translate (/ width 2) 0 0)
+    (draw-2d-texture tex 0 0 width height 0 0 1 1))
+  
+
+  (gl:pop-matrix)
+
   
   (gl:flush)
   (sdl:update-display))
 
 
-
-(defun pick-image-point (img num-of-points)
-  (let ((width (car (size (car img))))
-	(height (cadr (size (car img)))))
+(defun pick-image-point (img1 img2 num-of-points)
+  (let* ((w1 (car (size (car img1))))
+	 (h1 (cadr (size (car img1))))
+	 (w2 (car (size (car img2))))
+	 (h2 (cadr (size (car img2))))
+	 (w (+ w1 w2))
+	 (h (max h1 h2)))
 
     (sdl:with-init ()
-      (sdl:window width height
+      (sdl:window (+ w1 w2) (max h1 h2)
 		  :title-caption "Image"
 		  :icon-caption "Image"
 		  :opengl t
 		  :opengl-attributes '((:SDL-GL-DOUBLEBUFFER 1)))
     
-      (setup-ortho-projection width height)
+      (setup-ortho-projection w h)
 
-      (let ((tex (load-texture-from-img img)))
+      ;; Load textures
+      (let ((i1 (make-image img1))
+	    (i2 (make-image img2)))
+	       
 
-      (sdl:with-events ()
-	(:quit-event () t)
-	(:video-expose-event () (sdl:update-display))
-	(:mouse-button-down-event (:x x :y y) (format t "Click: (~A,~A)~%" x y))
-	(:idle () (draw width height tex) (slime-conn)))))))
+	(sdl:with-events ()
+	  (:quit-event () t)
+	  (:video-expose-event () (sdl:update-display))
+	  (:mouse-button-down-event (:x x :y y) (format t "Click: (~A,~A)~%" x y))
+	  (:idle () (draw i1 i2) (slime-conn)))
+	
+	;; Delete textures
+	(gl:delete-textures (list (slot-value i1 'tex)
+				  (slot-value i2 'tex)))))))
 
 	 
