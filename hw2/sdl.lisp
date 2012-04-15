@@ -54,6 +54,19 @@
       (apply 'gl:color c)
       (gl:vertex x1 y2 0))))
 
+(defun draw-line (p1 p2 color)
+  (gl:disable :texture-2d)
+  (apply 'gl:color color)
+
+
+  (gl:line-width 1)
+  (gl:begin :lines)
+  (gl:vertex (car p1) (cadr p1))
+  (gl:vertex (car p2) (cadr p2))
+  (gl:end)
+  (gl:enable :texture-2d))
+
+
 (defun draw-2d-rect (x y w h color)
   (gl:disable :texture-2d)
   (rectangle x y w h 0 0 1 1 color))
@@ -118,11 +131,51 @@
   (:documentation "Indicating the correspondence pair points"))
 
 
+(defun draw-point (point color size)
+  (draw-line (list (- (car point) size) (- (cadr point) size))
+	     (list (+ (car point) size) (+ (cadr point) size))
+	     color)
+  (draw-line (list (+ (car point) size) (- (cadr point) size))
+	     (list (- (car point) size) (+ (cadr point) size))
+	     color))
+
+
+(defun draw-landmark (i1 i2 landmark size)
+  (with-slots (pt1 pt2 color) landmark
+    (when pt1
+	(draw-point 
+	 (list (car pt1) (- (height i1) (cadr pt1))) 
+	 color size))
+    (gl:translate (width i1) 0 0)
+    (when pt2
+      (draw-point 
+       (list (car pt2) (- (height i1) (cadr pt2)))
+       color size))))
+    
+      
 (defvar *cur-landmark* nil)
 (defvar *landmarks* nil)
 
-(defun click-handler (x y))
+(defun rand-color ()
+  (list (/ (random 256) 255)
+	(/ (random 256) 255)
+	(/ (random 256) 255)))
+
+(defun click-handler (i1 i2 x y)
+  (format t "Click: (~A,~A)~%" x y)
+
+  ;; Make a new landmark
+  (when (null *cur-landmark*)
+    (setf *cur-landmark* (make-instance 'landmark :color (rand-color))))
   
+  (if (< x (width i1))
+      (setf (pt1 *cur-landmark*) (list x y))
+      (setf (pt2 *cur-landmark*) (list (- x (width i1)) y)))
+
+  ;; When the landmark is filled, push to the list
+  (when (and (pt1 *cur-landmark*) (pt2 *cur-landmark*))
+      (push *cur-landmark* *landmarks*)
+      (setf *cur-landmark* nil)))
 
 (defun make-image (img)
   (make-instance 'image 
@@ -131,13 +184,14 @@
 		 :width (car (size (car img)))
 		 :height (cadr (size (car img)))))
 
+
 (defun draw (i1 i2)
   (setup-draw)
 
-  (gl:load-identity)
 
+  ;; Draw images
   (gl:push-matrix)
-
+  (gl:load-identity)
   (with-slots (tex width height) i1
     (gl:translate (/ width 2) (/ height 2) 0)
     (draw-2d-texture tex 0 0 width height 0 0 1 1)
@@ -146,11 +200,21 @@
   (with-slots (tex width height) i2
     (gl:translate (/ width 2) 0 0)
     (draw-2d-texture tex 0 0 width height 0 0 1 1))
-  
-
   (gl:pop-matrix)
 
-  
+  ;; Draw landmarks
+  (gl:push-matrix)
+  (gl:load-identity)
+  (if *cur-landmark* 
+      (draw-landmark i1 i2 *cur-landmark* 10))
+  (gl:pop-matrix)
+
+  (dolist (l *landmarks*)
+    (gl:push-matrix)
+    (gl:load-identity)
+    (draw-landmark i1 i2 l 5)
+    (gl:pop-matrix))
+
   (gl:flush)
   (sdl:update-display))
 
@@ -180,7 +244,7 @@
 	(sdl:with-events ()
 	  (:quit-event () t)
 	  (:video-expose-event () (sdl:update-display))
-	  (:mouse-button-down-event (:x x :y y) (format t "Click: (~A,~A)~%" x y))
+	  (:mouse-button-down-event (:x x :y y) (click-handler i1 i2 x y))
 	  (:idle () (draw i1 i2) (slime-conn)))
 	
 	;; Delete textures
