@@ -62,7 +62,8 @@
 ;; Homography matrix
 
 (defun solve-homography-matrix (point-pairs)
-  (if (< (length point-pairs) 4)
+  "Return 3x3 homography matrix from the correspondence points"
+  (if (>= (length point-pairs) 4)
       (labels ((make-A-matrix ()
 		 (let ((mat
 			;; 9x2 matrix for each point pair
@@ -86,7 +87,7 @@
 			(B (m* (transpose A) A)))
 		   (multiple-value-bind (V-t _D _V) (svd B :A) 
 		     (declare (ignore _D) (ignore _V))
-		     (m* V-t (transpose [0 0 0 0 0 0 0 0 1])))))
+		     (transpose (reshape (m* V-t (transpose [0 0 0 0 0 0 0 0 1])) 3 3)))))
       (error "Need at least 4 correspondences")))
       
 

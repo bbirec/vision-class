@@ -215,11 +215,23 @@
     (draw-landmark i1 i2 l 5)
     (gl:pop-matrix))
 
+
+  ;; Draw transformed image
+  (when *homography* 
+    (gl:push-matrix)
+    (gl:load-identity)
+
+    (gl:load-matrix *homography*)
+
+    (draw-2d-rect 0 0 (width i2) (height i2) '(1 0 0))
+  
+    (gl:pop-matrix))
+
   (gl:flush)
   (sdl:update-display))
 
 
-(defun pick-image-point (img1 img2 num-of-points)
+(defun pick-image-point (img1 img2)
   (let* ((w1 (car (size (car img1))))
 	 (h1 (cadr (size (car img1))))
 	 (w2 (car (size (car img2))))
@@ -251,4 +263,41 @@
 	(gl:delete-textures (list (slot-value i1 'tex)
 				  (slot-value i2 'tex)))))))
 
-	 
+
+(defvar *points* nil)	 
+(defun get-points-from-landmarks ()
+  (setf *points* 
+	(loop for l in *landmarks* collect
+	   (list (append (pt1 l) '(1)) (append (pt2 l) '(1))))))
+
+(defun 2D->3D-transfom (2d-mat)
+  "Convert the 2D transform matrix to 3D transform matrix"
+  (assert (and (= (car (size 2d-mat)) 3)
+	       (= (cadr (size 2d-mat)) 3)))
+  (let ((3d-mat (make-float-matrix 4 4)))
+    (setf (matrix-ref 3d-mat 0 0) (matrix-ref 2d-mat 0 0))
+    (setf (matrix-ref 3d-mat 1 0) (matrix-ref 2d-mat 1 0))
+    (setf (matrix-ref 3d-mat 0 1) (matrix-ref 2d-mat 0 1))
+    (setf (matrix-ref 3d-mat 1 1) (matrix-ref 2d-mat 1 1))
+    (setf (matrix-ref 3d-mat 3 0) (matrix-ref 2d-mat 2 0))
+    (setf (matrix-ref 3d-mat 3 1) (matrix-ref 2d-mat 2 1))
+    (setf (matrix-ref 3d-mat 0 3) (matrix-ref 2d-mat 0 2))
+    (setf (matrix-ref 3d-mat 1 3) (matrix-ref 2d-mat 1 2))
+    (setf (matrix-ref 3d-mat 3 3) (matrix-ref 2d-mat 2 2))
+    
+    (setf (matrix-ref 3d-mat 2 2) 1)
+    3d-mat))
+
+(defun 3D-transform->list (mat)
+  (coerce (convert-to-lisp-array (reshape mat 16 1)) 'list))
+    
+(defvar *homography* nil)
+
+(defun compute-homography ()
+  (setf *homography* (3D-transform->list
+		      (2D->3D-transfom 
+		       (solve-homography-matrix *points*)))))
+
+
+
+
