@@ -196,7 +196,9 @@
 
 
 (defparameter *patch-size* 9)
+#+nil
 (defparameter *dog-img1* (gen-dog-images *img1*))
+#+nil
 (defparameter *dog-img2* (gen-dog-images *img2*))
 
 (defun msub (mat x y w h)
@@ -235,7 +237,7 @@
 				    (* 2 sigma sigma))))
 			 (* 2 pi sigma sigma))))))
     matrix))
-	 
+
 
 (defun harris-corner-detector (img-x img-y x y patch-size sigma)
   "Check whether the patch has corner or not."
@@ -266,5 +268,4 @@
 				   x y 9 2)))
     (values (> R 1) R)))
   
-  
-	 
+
