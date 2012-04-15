@@ -201,22 +201,25 @@
       (gl:translate (/ w1 2) (/ h1 2) 0)
       (draw-2d-texture tex1 0 0 w1 h1 0 0 1 1)
 
-      ;; Draw transformed image
-      (gl:push-matrix)
-      (when *homography* 
-	(gl:mult-matrix *homography*)
-
-      #+nil
-      (draw-2d-rect 0 0 w2 h2 '(1 0 0))
-      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1))
-      (gl:pop-matrix)
 
       ;; Draw image 2
 
       (gl:translate (/ w1 2) 0 0)
 
       (gl:translate (/ w2 2) 0 0)
-      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1)))
+      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1)
+
+      ;; Draw transformed image
+      (gl:push-matrix)
+      (when *homography* 
+
+
+	(gl:mult-matrix *homography*)
+
+	(draw-2d-rect 0 0 w1 h1 '(1 0 0))
+	#+nil
+	(draw-2d-texture tex1 0 0 w1 h1 0 0 1 1))
+      (gl:pop-matrix)))
 
   (gl:pop-matrix)
 

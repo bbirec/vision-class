@@ -87,7 +87,9 @@
 			(B (m* (transpose A) A)))
 		   (multiple-value-bind (V-t _D _V) (svd B :A) 
 		     (declare (ignore _D) (ignore _V))
-		     (transpose (reshape (m* V-t (transpose [0 0 0 0 0 0 0 0 1])) 3 3)))))
+		     (let ((h (m* V-t (transpose [0 0 0 0 0 0 0 0 1]))))
+		       (values (transpose (reshape h 3 3))
+			       A)))))
       (error "Need at least 4 correspondences")))
       
 
@@ -97,7 +99,12 @@
 		       (- (car (size mat)) 1)
 		       (- (car (size mat)) 1))))
     (m/ mat s)))
-		       
+		
+(defun test-identity-homography ()
+  (let ((h (solve-homography-matrix 
+	    (loop for i from 0 below 4 collect
+		 (list (list i i 1) (list i i 1))))))
+    (values h (normalize-matrix h))))
 
 ;; Linear filters
 (defparameter *filter-gaussian* 
