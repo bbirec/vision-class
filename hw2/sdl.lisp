@@ -215,7 +215,7 @@
 
 
 	(gl:mult-matrix *homography*)
-
+	;(gl:mult-matrix #(2 0 0 0 0 2 0 0 0 0 2 0 100 0 0 2))
 	(draw-2d-rect 0 0 w1 h1 '(1 0 0))
 	#+nil
 	(draw-2d-texture tex1 0 0 w1 h1 0 0 1 1))
@@ -314,10 +314,16 @@
 (defvar *homography* nil)
 
 (defun compute-homography (points)
-  (setf *homography* (3D-transform->arr
-		      (2D->3D-transfom 
-		       (solve-homography-matrix points)))))
+  (let ((H (2D->3D-transfom 
+	    (solve-homography-matrix points))))
+    (values (setf *homography* (3D-transform->arr H)) H)))
 
+(defun normalize-vector (vec)
+  (m/ vec (matrix-ref vec (- (car (size vec)) 1))))
 
+(defun test-homography (points)
+  (multiple-value-bind (arr H) (compute-homography points)
+    (format t "H: ~A~%" H)
+    (format t "H * 0: ~A~%" (normalize-vector (m* H [0 0 0 1]')))))
 
 

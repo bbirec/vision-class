@@ -102,8 +102,10 @@
 		
 (defun test-identity-homography ()
   (let ((h (solve-homography-matrix 
-	    (loop for i from 0 below 4 collect
-		 (list (list i i 1) (list i i 1))))))
+	    (loop for i from 0 below 30 collect
+	      (let ((v1 (random 500))
+		    (v2 (random 500)))
+	      (list (list v1 v2 1) (list v1 v2 1)))))))
     (values h (normalize-matrix h))))
 
 ;; Linear filters
