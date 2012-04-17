@@ -5,6 +5,7 @@
 ;; Getting points to compute the homography matrix.
 ;; Representing the stitched image in 3D space with OpenGL.
 
+
 (defun setup-ortho-projection (width height)
   "Setup OpenGL to use for 2D graphics"
   (gl:viewport 0 0 width height)
@@ -27,6 +28,7 @@
        (or swank::*emacs-connection* (swank::default-connection))))
   (when (and connection (not (eql swank:*communication-style* :spawn)))
     (swank::handle-requests connection t))))
+
 
 (defun rectangle (x y width height 
 		  &optional (u1 0) (v1 0) (u2 1) (v2 1) (c '(1 1 1)))
@@ -180,26 +182,50 @@
 	(/ (random 256) 255)
 	(/ (random 256) 255)))
 
+
+(defvar *square-points* nil)
+(defvar *square-homography* nil)
+
 (defun click-handler (i1 i2 x y)
   (format t "Click: (~A,~A)~%" x y)
 
-  ;; Make a new landmark
-  (when (null *cur-landmark*)
-    (setf *cur-landmark* (make-instance 'landmark :color (rand-color))))
+  (if *pick-mode*
+      (progn
+
+	;; Make a new landmark
+	(when (null *cur-landmark*)
+	  (setf *cur-landmark* (make-instance 'landmark :color (rand-color))))
   
-  (if (< x (width i1))
-      (setf (pt1 *cur-landmark*) (list x (- (height i1) y)))
-      (setf (pt2 *cur-landmark*) (list (- x (width i1)) (- (height i1) y))))
+	(if (< x (width i1))
+	    (setf (pt1 *cur-landmark*) (list x (- (height i1) y)))
+	    (setf (pt2 *cur-landmark*) (list (- x (width i1)) (- (height i1) y))))
 
-  ;; When the landmark is filled, push to the list
-  (when (and (pt1 *cur-landmark*) (pt2 *cur-landmark*))
-      (push *cur-landmark* *landmarks*)
-      (setf *cur-landmark* nil))
+	;; When the landmark is filled, push to the list
+	(when (and (pt1 *cur-landmark*) (pt2 *cur-landmark*))
+	  (push *cur-landmark* *landmarks*)
+	  (setf *cur-landmark* nil))
 
-  ;; If the points are collected, compute the homography matrix
-  (when (>= (length *landmarks*) 4)
-    (compute-homography (get-points-from-landmarks))
-    (compute-transformed-vertices (get-points-from-landmarks))))
+	;; If the points are collected, compute the homography matrix
+	(when (>= (length *landmarks*) 4)
+	  (setf *homography* (compute-homography (get-points-from-landmarks)))))
+
+      (progn
+	(push (list (- x 1000) (- (height i1) y) 1) *square-points*)
+
+	(when (= (length *square-points*) 4)
+	  ;; Compute homography matrix
+	  (setf *square-homography*
+		(compute-homography
+		 (mapcar #'list 
+			 *square-points*
+			 '((0 0 1) (300 0 1) (300 300 1) (0 300 1)))))
+	  
+	  ;; Clear the homography matrix
+	  (setf *square-points* nil))
+
+	)))
+
+
 
 (defun make-image (img)
   (make-instance 'image 
@@ -208,13 +234,36 @@
 		 :width (car (size (car img)))
 		 :height (cadr (size (car img)))))
 
+(defun draw-result (i1 i2)
+  (with-slots ((tex1 tex) (w1 width) (h1 height)) i1
+    (with-slots ((tex2 tex) (w2 width) (h2 height)) i2
 
-(defun draw (i1 i2)
-  (setup-draw)
+      (let ((s 1))
+	(gl:scale s s 1))
+
+      (gl:translate 1000 0 0)
 
 
-  ;; Draw images
-  
+      (if *square-homography*
+	  (gl:mult-matrix *square-homography*))
+
+
+      (gl:push-matrix)
+      (gl:translate (/ w2 2) (/ h2 2) 0)
+      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1)
+      (gl:pop-matrix)
+
+
+      (when *homography* 
+	  (gl:push-matrix)
+	  (gl:mult-matrix *homography*)
+
+	  (gl:translate (/ w1 2) (/ h1 2) 0)
+	  (draw-2d-texture tex1 0 0 w1 h1 0 0 1 1 '(1 1 1 0.5))
+	  (gl:pop-matrix)))))
+
+
+(defun draw-pick (i1 i2)
   (gl:push-matrix)
   (gl:load-identity)
 
@@ -227,57 +276,13 @@
 
 
       ;; Draw image 2
-
       (gl:translate (/ w1 2) 0 0)
-
       (gl:translate (/ w2 2) 0 0)
-      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1)
-
-      ;; Draw transformed image
-      (gl:push-matrix)
-      #+nil
-      (when *homography* 
-
-	(gl:load-matrix *homography*)
-
-	#+nil
-	(gl:mult-matrix #(2 0 0 0 0 2 0 0 0 0 2 0 100 0 0 2))
-
-
-	(draw-2d-rect 0 0 w1 h1 '(1 0 0))
-
-	(draw-2d-texture tex1 0 0 w1 h1 0 0 1 1))
-      (gl:pop-matrix)
-      
-      ;; Test draw
-      (when *transformed-vertices*
-	  (gl:push-matrix)
-	  (gl:enable :texture-2d)
-	  (gl:bind-texture :texture-2d tex1)
-
-	  (gl:translate (- (/ w2 2)) (- (/ h2 2)) 0)
-
-	  #+nil
-	  (rectangle2 '(10 10)
-		      '(100 20)
-		      '(100 100)
-		      '(0 100))
-
-	  #+nil
-	  (rectangle2 '(-437 356)
-		      '(-808 28)
-		      '(8184 -173)
-		      '(1127 723))
-
-	  (apply #'rectangle2 *transformed-vertices*)
-	  
-	  (gl:pop-matrix))))
+      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1)))
 
   (gl:pop-matrix)
 
-
-
-  ;; Draw landmarks
+    ;; Draw landmarks
   (gl:push-matrix)
   (gl:load-identity)
   (if *cur-landmark* 
@@ -288,13 +293,39 @@
     (gl:push-matrix)
     (gl:load-identity)
     (draw-landmark i1 i2 l 5)
-    (gl:pop-matrix))
+    (gl:pop-matrix)))
+
+      
+
+
+
+(defun draw (i1 i2)
+  (setup-draw)
+
+
+  ;; Draw images
+  
+  (gl:push-matrix)
+  (gl:load-identity)
+
+  (if *pick-mode*
+      (draw-pick i1 i2)
+      (draw-result i1 i2))
+      
+
+  (gl:pop-matrix)
+
 
 
 
   (gl:flush)
   (sdl:update-display))
 
+(defvar *pick-mode* t)
+
+(defun key-handler (key)
+  (cond ((sdl:key= key :sdl-key-space) (setf *pick-mode* (not *pick-mode*)))
+	((sdl:key= key :sdl-key-escape) (clear-homography))))
 
 (defun pick-image-point (img1 img2)
   (let* ((w1 (car (size (car img1))))
@@ -321,6 +352,7 @@
 	(sdl:with-events ()
 	  (:quit-event () t)
 	  (:video-expose-event () (sdl:update-display))
+	  (:key-down-event (:key key) (key-handler key))
 	  (:mouse-button-down-event (:x x :y y) (click-handler i1 i2 x y))
 	  (:idle () (draw i1 i2) (slime-conn)))
 	
@@ -363,7 +395,7 @@
 (defun compute-homography (points)
   (let ((H (2D->3D-transfom 
 	    (normalize-matrix (solve-homography-matrix points)))))
-    (values (setf *homography* (3D-transform->arr H)) H)))
+    (values (3D-transform->arr H) H)))
 
 (defun normalize-vector (vec)
   (m/ vec (matrix-ref vec (- (car (size vec)) 1))))
@@ -377,19 +409,8 @@
     (format t "H * 0: ~A~%" (normalize-vector (m* H [720 576 0 1]')))))
 
 
-
-(defvar *transformed-vertices* nil)
-
-(defun conv-to-point (vec)
-  (let ((l (coerce (convert-to-lisp-array vec) 'list)))
-    (list (car l) (cadr l))))
-
-(defun compute-transformed-vertices (points)
-  (let ((H (solve-homography-matrix points)))
-    (setf *transformed-vertices*
-    (list 
-     (conv-to-point (normalize-vector (m* H [0 0 1]')))
-     (conv-to-point (normalize-vector (m* H [720 0 1]')))
-     (conv-to-point (normalize-vector (m* H [720 576 1]')))
-     (conv-to-point (normalize-vector (m* H [0 576 1]')))))))
   
+(defun clear-homography ()
+  (setf *homography* nil)
+  (setf *cur-landmark* nil)
+  (setf *landmarks* nil))
