@@ -82,3 +82,10 @@
 				    (* 2 sigma sigma))))
 			 (* 2 pi sigma sigma))))))
     matrix))
+
+;; Generating DoG image
+(defun gen-dog-images (img)
+  (let* ((smoothed (filter-2d img *filter-gaussian*))
+	 (sobel-x (filter-2d smoothed *filter-sobel-x*))
+	 (sobel-y (filter-2d smoothed *filter-sobel-y*)))
+    (list sobel-x sobel-y)))

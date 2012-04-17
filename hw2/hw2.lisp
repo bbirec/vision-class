@@ -15,47 +15,28 @@
   (write-image-to-file (concatenate 'string *path* filename) mat-R mat-G mat-B))
 
 
+(defparameter *img1* nil)
+(defparameter *img2* nil)
+(defparameter *dog-img1* nil)
+(defparameter *dog-img2* nil)
+  
+(defun init-hw2 ()
+  ;; Load images
+  (setf *img1* (load-image "view1.png")
+	*img2* (load-image "view2.png"))
 
-(defun filter-2d-save (filename img &rest filter)
-  (destructuring-bind (r g b) (apply #'filter-2d (cons img filter))
-    (write-image filename r g b)))
-
-
-
-;; Generating DoG image
-(defun gen-dog-images (img)
-  (let* ((smoothed (filter-2d img *filter-gaussian*))
-	 (sobel-x (filter-2d smoothed *filter-sobel-x*))
-	 (sobel-y (filter-2d smoothed *filter-sobel-y*)))
-    (list sobel-x sobel-y)))
-
-
-
-
-(defparameter *img1* (load-image "view1.png"))
-(defparameter *img2* (load-image "view2.png"))
-
-
-(defun gen-images ()
-  (destructuring-bind (dx dy) (gen-dog-images *img1*)
+  (setf *dog-img1* (gen-dog-images *img1*)
+	*dog-img2* (gen-dog-images *img2*)))
+  
+	
+(defun save-dog-images ()
+  (destructuring-bind (dx dy) *dog-img1*
     (write-image "img1_dx.png" (first dx) (second dx) (third dx))
     (write-image "img1_dy.png" (first dy) (second dy) (third dy)))
-  (destructuring-bind (dx dy) (gen-dog-images *img2*)
+  (destructuring-bind (dx dy) *dog-img2*
     (write-image "img2_dx.png" (first dx) (second dx) (third dx))
     (write-image "img2_dy.png" (first dy) (second dy) (third dy))))
-
-
-;; Finding corner based on the point picked manually.
-
-
-(defparameter *patch-size* 9)
-#+nil
-(defparameter *dog-img1* (gen-dog-images *img1*))
-#+nil
-(defparameter *dog-img2* (gen-dog-images *img2*))
-
-
-
+  
 
 ;; 
 

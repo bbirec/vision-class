@@ -30,3 +30,17 @@
 				   x y 9 2)))
     (values (> R 1) R)))
   
+(defun search-corner (dog-img x y size)
+  "Finding the position of corner by checking the near pixel with the harris corner detector"
+
+  (let ((img-x (rgb->grayscale (first dog-img)))
+	(img-y (rgb->grayscale (second dog-img))))
+  
+    (cdr (reduce 
+	  #'(lambda (x y) (if (> (car x) (car y)) x y))
+	  (loop for dy from (- size) to size append
+	       (loop for dx from (- size) to size collect
+		    (let ((px (+ dx x))
+			  (py (+ dy y)))
+		      ;; Finding the largest R value
+		      (list (harris-corner-detector img-x img-y px py 9 2) px py))))))))
