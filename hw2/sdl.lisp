@@ -1,10 +1,6 @@
 (in-package #:hw2)
 
-
-;; Using SDL to interact with user to get correspodence points.
-;; Getting points to compute the homography matrix.
-;; Representing the stitched image in 3D space with OpenGL.
-
+;; SDL & OpenGL related functions
 
 (defun setup-ortho-projection (width height)
   "Setup OpenGL to use for 2D graphics"
@@ -23,11 +19,6 @@
   (gl:clear :color-buffer-bit)
   (gl:color 1 1 1))
 
-(defun slime-conn ()
-  (let ((connection
-       (or swank::*emacs-connection* (swank::default-connection))))
-  (when (and connection (not (eql swank:*communication-style* :spawn)))
-    (swank::handle-requests connection t))))
 
 
 (defun rectangle (x y width height 
@@ -56,25 +47,6 @@
       (apply 'gl:color c)
       (gl:vertex x1 y2 0))))
 
-(defun rectangle2 (p1 p2 p3 p4 &optional 
-		   (u1 0) (v1 0) (u2 1) (v2 1) (c '(1 1 1)))
-  (gl:with-primitive :quads
-    (gl:tex-coord u1 v2)
-    (apply 'gl:color c)
-    (gl:vertex (car p1) (cadr p1) 0)
-
-    (gl:tex-coord u2 v2)
-    (apply 'gl:color c)
-    (gl:vertex (car p2) (cadr p2) 0)
-
-    (gl:tex-coord u2 v1)
-    (apply 'gl:color c)
-    (gl:vertex (car p3) (cadr p3) 0)
-
-    (gl:tex-coord u1 v1)
-    (apply 'gl:color c)
-    (gl:vertex (car p4) (cadr p4) 0)))
-
 (defun draw-line (p1 p2 color)
   (gl:disable :texture-2d)
   (apply 'gl:color color)
@@ -98,7 +70,19 @@
   (rectangle x y w h u1 v1 u2 v2 color))
 
 
+(defun draw-point (point color size)
+  "Draw a point with crossing two lines."
+  (draw-line (list (- (car point) size) (- (cadr point) size))
+	     (list (+ (car point) size) (+ (cadr point) size))
+	     color)
+  (draw-line (list (+ (car point) size) (- (cadr point) size))
+	     (list (- (car point) size) (+ (cadr point) size))
+	     color))
+
+
 (defun load-texture-from-img (img)
+  "Load a texture from the image matrix."
+
   (let* ((texture (car (gl:gen-textures 1)))
 	 (iw (car (size (car img))))
 	 (ih (cadr (size (car img))))
@@ -128,289 +112,10 @@
 
 
 
-
-(defclass image ()
-  ((tex :initarg :tex
-	:accessor tex)
-   (mat :initarg :mat
-	:accessor mat)
-   (width :initarg :width
-	  :accessor width)
-   (height :initarg :height
-	   :accessor height)))
-
-
-(defclass landmark ()
-  ((pt1 :initarg :pt1
-	:initform nil
-	:accessor pt1)
-   (pt2 :initarg :pt2
-	:initform nil
-	:accessor pt2)
-   (color :initarg :color
-	  :accessor color))
-  (:documentation "Indicating the correspondence pair points"))
-
-
-(defun draw-point (point color size)
-  (draw-line (list (- (car point) size) (- (cadr point) size))
-	     (list (+ (car point) size) (+ (cadr point) size))
-	     color)
-  (draw-line (list (+ (car point) size) (- (cadr point) size))
-	     (list (- (car point) size) (+ (cadr point) size))
-	     color))
-
-
-(defun draw-landmark (i1 i2 landmark size)
-  (with-slots (pt1 pt2 color) landmark
-    (when pt1
-	(draw-point 
-	 (list (car pt1) (cadr pt1))
-	 color size))
-    (gl:translate (width i1) 0 0)
-    (when pt2
-      (draw-point 
-       (list (car pt2) (cadr pt2))
-       color size))))
-    
-      
-(defvar *cur-landmark* nil)
-(defvar *landmarks* nil)
-
 (defun rand-color ()
+  "Generating a random color"
   (list (/ (random 256) 255)
 	(/ (random 256) 255)
 	(/ (random 256) 255)))
 
 
-(defvar *square-points* nil)
-(defvar *square-homography* nil)
-
-(defun click-handler (i1 i2 x y)
-  (format t "Click: (~A,~A)~%" x y)
-
-  (if *pick-mode*
-      (progn
-
-	;; Make a new landmark
-	(when (null *cur-landmark*)
-	  (setf *cur-landmark* (make-instance 'landmark :color (rand-color))))
-  
-	(if (< x (width i1))
-	    (setf (pt1 *cur-landmark*) (list x (- (height i1) y)))
-	    (setf (pt2 *cur-landmark*) (list (- x (width i1)) (- (height i1) y))))
-
-	;; When the landmark is filled, push to the list
-	(when (and (pt1 *cur-landmark*) (pt2 *cur-landmark*))
-	  (push *cur-landmark* *landmarks*)
-	  (setf *cur-landmark* nil))
-
-	;; If the points are collected, compute the homography matrix
-	(when (>= (length *landmarks*) 4)
-	  (setf *homography* (compute-homography (get-points-from-landmarks)))))
-
-      (progn
-	(push (list (- x 1000) (- (height i1) y) 1) *square-points*)
-
-	(when (= (length *square-points*) 4)
-	  ;; Compute homography matrix
-	  (setf *square-homography*
-		(compute-homography
-		 (mapcar #'list 
-			 *square-points*
-			 '((0 0 1) (300 0 1) (300 300 1) (0 300 1)))))
-	  
-	  ;; Clear the homography matrix
-	  (setf *square-points* nil))
-
-	)))
-
-
-
-(defun make-image (img)
-  (make-instance 'image 
-		 :tex (load-texture-from-img img)
-		 :mat img
-		 :width (car (size (car img)))
-		 :height (cadr (size (car img)))))
-
-(defun draw-result (i1 i2)
-  (with-slots ((tex1 tex) (w1 width) (h1 height)) i1
-    (with-slots ((tex2 tex) (w2 width) (h2 height)) i2
-
-      (let ((s 1))
-	(gl:scale s s 1))
-
-      (gl:translate 1000 0 0)
-
-
-      (if *square-homography*
-	  (gl:mult-matrix *square-homography*))
-
-
-      (gl:push-matrix)
-      (gl:translate (/ w2 2) (/ h2 2) 0)
-      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1)
-      (gl:pop-matrix)
-
-
-      (when *homography* 
-	  (gl:push-matrix)
-	  (gl:mult-matrix *homography*)
-
-	  (gl:translate (/ w1 2) (/ h1 2) 0)
-	  (draw-2d-texture tex1 0 0 w1 h1 0 0 1 1 '(1 1 1 0.5))
-	  (gl:pop-matrix)))))
-
-
-(defun draw-pick (i1 i2)
-  (gl:push-matrix)
-  (gl:load-identity)
-
-  (with-slots ((tex1 tex) (w1 width) (h1 height)) i1
-    (with-slots ((tex2 tex) (w2 width) (h2 height)) i2
-
-      ;; Draw image 1
-      (gl:translate (/ w1 2) (/ h1 2) 0)
-      (draw-2d-texture tex1 0 0 w1 h1 0 0 1 1)
-
-
-      ;; Draw image 2
-      (gl:translate (/ w1 2) 0 0)
-      (gl:translate (/ w2 2) 0 0)
-      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1)))
-
-  (gl:pop-matrix)
-
-    ;; Draw landmarks
-  (gl:push-matrix)
-  (gl:load-identity)
-  (if *cur-landmark* 
-      (draw-landmark i1 i2 *cur-landmark* 10))
-  (gl:pop-matrix)
-
-  (dolist (l *landmarks*)
-    (gl:push-matrix)
-    (gl:load-identity)
-    (draw-landmark i1 i2 l 5)
-    (gl:pop-matrix)))
-
-      
-
-
-
-(defun draw (i1 i2)
-  (setup-draw)
-
-
-  ;; Draw images
-  
-  (gl:push-matrix)
-  (gl:load-identity)
-
-  (if *pick-mode*
-      (draw-pick i1 i2)
-      (draw-result i1 i2))
-      
-
-  (gl:pop-matrix)
-
-
-
-
-  (gl:flush)
-  (sdl:update-display))
-
-(defvar *pick-mode* t)
-
-(defun key-handler (key)
-  (cond ((sdl:key= key :sdl-key-space) (setf *pick-mode* (not *pick-mode*)))
-	((sdl:key= key :sdl-key-escape) (clear-homography))))
-
-(defun pick-image-point (img1 img2)
-  (let* ((w1 (car (size (car img1))))
-	 (h1 (cadr (size (car img1))))
-	 (w2 (car (size (car img2))))
-	 (h2 (cadr (size (car img2))))
-	 (w (+ w1 w2))
-	 (h (max h1 h2)))
-
-    (sdl:with-init ()
-      (sdl:window (+ w1 w2) (max h1 h2)
-		  :title-caption "Image"
-		  :icon-caption "Image"
-		  :opengl t
-		  :opengl-attributes '((:SDL-GL-DOUBLEBUFFER 1)))
-    
-      (setup-ortho-projection w h)
-
-      ;; Load textures
-      (let ((i1 (make-image img1))
-	    (i2 (make-image img2)))
-	       
-
-	(sdl:with-events ()
-	  (:quit-event () t)
-	  (:video-expose-event () (sdl:update-display))
-	  (:key-down-event (:key key) (key-handler key))
-	  (:mouse-button-down-event (:x x :y y) (click-handler i1 i2 x y))
-	  (:idle () (draw i1 i2) (slime-conn)))
-	
-	;; Delete textures
-	(gl:delete-textures (list (slot-value i1 'tex)
-				  (slot-value i2 'tex)))))))
-
-
-(defvar *points* nil)	 
-(defun get-points-from-landmarks ()
-  (setf *points* 
-	(loop for l in *landmarks* collect
-	     (list (append (pt1 l) '(1)) 
-		   (append (pt2 l) '(1))))))
-
-
-(defun 2D->3D-transfom (2d-mat)
-  "Convert the 2D transform matrix to 3D transform matrix"
-  (assert (and (= (car (size 2d-mat)) 3)
-	       (= (cadr (size 2d-mat)) 3)))
-  (let ((3d-mat (make-float-matrix 4 4)))
-    (setf (matrix-ref 3d-mat 0 0) (matrix-ref 2d-mat 0 0))
-    (setf (matrix-ref 3d-mat 1 0) (matrix-ref 2d-mat 1 0))
-    (setf (matrix-ref 3d-mat 0 1) (matrix-ref 2d-mat 0 1))
-    (setf (matrix-ref 3d-mat 1 1) (matrix-ref 2d-mat 1 1))
-    (setf (matrix-ref 3d-mat 3 0) (matrix-ref 2d-mat 2 0))
-    (setf (matrix-ref 3d-mat 3 1) (matrix-ref 2d-mat 2 1))
-    (setf (matrix-ref 3d-mat 0 3) (matrix-ref 2d-mat 0 2))
-    (setf (matrix-ref 3d-mat 1 3) (matrix-ref 2d-mat 1 2))
-    (setf (matrix-ref 3d-mat 3 3) (matrix-ref 2d-mat 2 2))
-    
-    (setf (matrix-ref 3d-mat 2 2) 1)
-    3d-mat))
-
-(defun 3D-transform->arr (mat)
-  (convert-to-lisp-array (reshape mat 16 1)))
-    
-(defvar *homography* nil)
-
-(defun compute-homography (points)
-  (let ((H (2D->3D-transfom 
-	    (normalize-matrix (solve-homography-matrix points)))))
-    (values (3D-transform->arr H) H)))
-
-(defun normalize-vector (vec)
-  (m/ vec (matrix-ref vec (- (car (size vec)) 1))))
-
-(defun test-homography (points)
-  (multiple-value-bind (arr H) (compute-homography points)
-    (format t "H: ~A~%" H)
-    (format t "H * 0: ~A~%" (normalize-vector (m* H [0 0 0 1]')))
-    (format t "H * 0: ~A~%" (normalize-vector (m* H [720 0 0 1]')))
-    (format t "H * 0: ~A~%" (normalize-vector (m* H [0 576 0 1]')))
-    (format t "H * 0: ~A~%" (normalize-vector (m* H [720 576 0 1]')))))
-
-
-  
-(defun clear-homography ()
-  (setf *homography* nil)
-  (setf *cur-landmark* nil)
-  (setf *landmarks* nil))

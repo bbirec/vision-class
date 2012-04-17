@@ -1,7 +1,11 @@
 (asdf:defsystem #:hw2
   :serial t
-  :components ((:file "hw2")
-	       (:file "sdl"))
+  :components ((:file "sdl")
+	       (:file "util")
+	       (:file "filter")
+	       (:file "corner")
+	       (:file "homography")
+	       (:file "hw2"))
   :depends-on (#:png-read 
 	       #:matlisp 
 	       #:zpng

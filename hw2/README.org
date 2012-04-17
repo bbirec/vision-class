@@ -1,0 +1,52 @@
+* Overview
+This assignment is also implemented with Common Lisp. However, the matrix
+library, lisplab, is no longer used because it doesn't have the SVD and other
+convenient functions. Instead the matlisp is used for computing matrix operations.
+
+
+
+* Corner detection
+Improving the corner position picked manually is done by Harris Corner Detector.
+First, for each image (view1.png and view2.png) the derivative of gaussian image(DoG)
+is required. Applying the Sobel filter and Gaussian filter to the images for 
+each color components makes the DoG images. Depending the direction of Sobel filter,
+the images has the direction dx or dy. The result image is saved in 
+img1_dx.png, img1_dy.png, img2_dx.png, img2_dy.png.
+
+After that the auto-correlation matrix is computed by applying the gaussian filter
+which is the same size with the patch. By performing SVD to the structure tensor,
+the lambda x and y are returned. The Harris Corner Detector equation
+
+R = ld-x * ld-y - 0.06*(ld-x + ld-y)^2 
+
+is calculated to determine whether the point has corner or not.
+
+
+* Homography matrix
+The matrix A (Nx9) is made by the corner points. In order to solve the linear
+equation at least four correspondence is required. After constructing the matrix 
+applied SVD to A and V' * [0 0 0 0 0 0 0 0 1]' is the homography matrix.
+
+I implemented the user interface with SDL library and OpenGL to pick 
+the correspondence points on the images. The homography matrix is 2D projective
+matrix, but I need 3D projective matrix because OpenGL only supports 3D matrix.
+
+The following matrix conversion is implemented in "2D->3D-transform" function.
+
+H = |a b c|
+    |d e f|
+    |g h i|
+
+H' = |a b 0 c|
+     |d e 0 f|
+     |0 0 1 0|
+     |g h 0 i|
+
+The coordinate for picking point is same with OpenGL's default coordinate whose
+the origin is lower left.
+
+Computing the topview image is done by performing another homography for the
+square shape of floor tiles in the composited image.
+
+
+* Conclusion & Discussion

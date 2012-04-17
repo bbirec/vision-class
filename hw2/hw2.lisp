@@ -9,180 +9,16 @@
 ;; Image load & write
 
 (defun load-image (filename)
-  "Converting the input image to matrix form"
-  (let* ((img (read-png-file (concatenate 'string *path* filename)))
-	 (data (image-data img))
-	 (w (width img))
-	 (h (height img))
-	 (mat-R (make-float-matrix w h))
-	 (mat-G (make-float-matrix w h))
-	 (mat-B (make-float-matrix w h)))
-    (loop for y from 0 below h do
-	 (loop for x from 0 below w do
-	      (setf (matrix-ref mat-R x y) (aref data x y 0))
-	      (setf (matrix-ref mat-G x y) (aref data x y 1))
-	      (setf (matrix-ref mat-B x y) (aref data x y 2))))
-    (list mat-R mat-G mat-B)))
-
-
-
-
-(defun clamp (x min max)
-  (if (< x min) min
-      (if (> x max) max x)))
-
-(defun conv-8-bit (v)
-  (round (clamp v 0.0 255.0)))
+  (load-image-from-file (concatenate 'string *path* filename)))
 
 (defun write-image (filename mat-R mat-G mat-B)
-  (let* ((s (size mat-R))
-	 (w (car s))
-	 (h (cadr s))
-	 (png (make-instance 'zpng:png
-			    :color-type :truecolor
-			    :width w
-			    :height h))
-	 (image (zpng:data-array png)))
-    (loop for y from 0 below h do
-	 (loop for x from 0 below w do
-	      (setf (aref image y x 0) (conv-8-bit (matrix-ref mat-R x y)))
-	      (setf (aref image y x 1) (conv-8-bit (matrix-ref mat-G x y)))
-      	      (setf (aref image y x 2) (conv-8-bit (matrix-ref mat-B x y)))))
-    (zpng:write-png png (concatenate 'string *path* filename))))
-			    
-
-
-;; Matlisp
-
-(defmacro join* (position &rest mats)
-  (reduce #'(lambda (a b) `(join ,a ,b ,position)) mats))
-
-
-
-;; Homography matrix
-
-(defun solve-homography-matrix (point-pairs)
-  "Return 3x3 homography matrix from the correspondence points"
-  (if (>= (length point-pairs) 4)
-      (labels ((make-A-matrix ()
-		 (let ((mat
-			;; 9x2 matrix for each point pair
-			(loop for (p1 p2) in point-pairs collect
-			     (destructuring-bind (x y w) p2
-			       (let* ((mp1 (transpose (make-float-matrix p1)))
-				      (m00 (make-float-matrix 1 3))
-				      (m01 (m* (- w) mp1))
-				      (m02 (m* y mp1))
-				      (m10 (m* w mp1))
-				      (m11 (make-float-matrix 1 3))
-				      (m12 (m* (- x) mp1)))
-				 (join* :vertical
-					(join* :horizontal m00 m01 m02)
-					(join* :horizontal m10 m11 m12)))))))
-
-		   ;; Join the four matrix in vertical
-		   (reduce #'(lambda (a b) (join a b :vertical)) mat))))
-		 
-		 (let* ((A (make-A-matrix))
-			(B (m* (transpose A) A)))
-		   (multiple-value-bind (V-t _D _V) (svd B :A) 
-		     (declare (ignore _D) (ignore _V))
-		     (let ((h (m* V-t (transpose [0 0 0 0 0 0 0 0 1]))))
-		       (values (transpose (reshape h 3 3))
-			       A)))))
-      (error "Need at least 4 correspondences")))
-      
-
-(defun normalize-matrix (mat)
-  (assert (square-matrix-p mat))
-  (let ((s (matrix-ref mat 
-		       (- (car (size mat)) 1)
-		       (- (car (size mat)) 1))))
-    (m/ mat s)))
-		
-(defun test-identity-homography ()
-  (let ((h (solve-homography-matrix 
-	    (loop for i from 0 below 30 collect
-	      (let ((v1 (random 500))
-		    (v2 (random 500)))
-	      (list (list v1 v2 1) (list (+ v1 100) v2 1)))))))
-    (values h (normalize-matrix h))))
-
-;; Linear filters
-(defparameter *filter-gaussian* 
-  [
-  [1/256 4/256 6/256 4/256 1/256];
-  [4/256 16/256 24/256 16/256 4/256];
-  [6/256 24/256 36/256 24/256 6/256];
-  [4/256 16/256 24/256 16/256 4/256];
-  [1/256 4/256 6/256 4/256 1/256];
-  ])
-
-(defparameter *filter-sobel-x* 
-  [
-  [-1/8 0 1/8];
-  [-2/8 0 2/8];
-  [-1/8 0 1/8];
-  ])
-
-(defparameter *filter-sobel-y*
-  [
-  [-1/8 -2/8 -1/8];
-  [0 0 0];
-  [1/8 2/8 1/8];
-  ])
-	      
-;; Convolution
-
-(defun conv-2d (img filter)
-  "2D image convolution operation"
-  (let* ((is (size img))
-	 (fs (size filter))
-	 (diff (floor (/ (car fs) 2)))
-	 (offset (- diff))
-	 (offset2 (* offset 2))
-	 (output (make-float-matrix (+ (car is) offset2)
-				    (+ (cadr is) offset2))))
-	 
-    ;; Filter should be odd size
-    (assert (and (oddp (car fs)) (oddp (cadr fs))))
-
-    (loop for iy from diff below (+ (cadr is) offset) do
-       (loop for ix from diff below (+ (car is) offset) do
-	    
-	    ;; Loop filter values
-	    (let ((value 0))
-	    
-	    (loop for fy from 0 below (cadr fs) do
-		 (loop for fx from 0 below (car fs) do
-		      (setf value (+ value 
-				     (* (matrix-ref filter fy fx)
-					(matrix-ref img 
-						    (+ ix fy offset) 
-						    (+ iy fx offset)))))))
-	    ;; Output matrix
-	    (setf (matrix-ref output (+ ix offset) (+ iy offset))
-		  value))))
-    output))
-
-  
-;; Applying 2d linear image
-(defun filter-2d (img &rest filter)
-  (destructuring-bind (r g b) img
-    (loop for f in filter do
-	 (setf r (conv-2d r f))
-	 (setf g (conv-2d g f))
-	 (setf b (conv-2d b f)))
-    (list r g b)))
+  (write-image-to-file (concatenate 'string *path* filename) mat-R mat-G mat-B))
 
 
 
 (defun filter-2d-save (filename img &rest filter)
   (destructuring-bind (r g b) (apply #'filter-2d (cons img filter))
     (write-image filename r g b)))
-
-
-
 
 
 
@@ -218,71 +54,262 @@
 #+nil
 (defparameter *dog-img2* (gen-dog-images *img2*))
 
-(defun msub (mat x y w h)
-  "Getting a rectangluar region of given matrix."
-  (assert (and (>= x 0) (>= y 0)
-	       (>= w 1) (>= h 1)
-	       (<= (+ x w) (cadr (size mat)))
-	       (<= (+ y h) (car (size mat)))))
-
-  (let ((m (make-float-matrix h w)))
-    (loop for my from 0 below h do
-	 (loop for mx from 0 below w do
-	      (setf (matrix-ref m mx my)
-		    (matrix-ref mat (+ mx x) (+ my y)))))
-    m))
-
-(defun msub-center (mat x y size)
-  "Getting the subset of matrix where the position is centered."
-  (assert (and (>= size 1) (oddp size)))
-  (let* ((diff (floor (/ size 2)))
-	 (mx (- x diff))
-	 (my (- y diff)))
-    (msub mat mx my size size)))
-
-(defun gaussian-filter (size sigma)
-  "Sample the gaussian in matrix form."
-  (assert (oddp size))
-  (let ((matrix (make-float-matrix size size))
-	(diff (floor (/ size 2))))
-    (loop for y from 0 below size do
-	 (loop for x from 0 below size do
-	      (let ((fx (- x diff))
-		    (fy (- y diff)))
-		(setf (matrix-ref matrix x y)
-		      (/ (exp (- (/ (+ (* fx fx) (* fy fy))
-				    (* 2 sigma sigma))))
-			 (* 2 pi sigma sigma))))))
-    matrix))
 
 
-(defun harris-corner-detector (img-x img-y x y patch-size sigma)
-  "Check whether the patch has corner or not."
-  (let ((ix (msub-center img-x x y patch-size))
-	(iy (msub-center img-y x y patch-size)))
-    (let ((ix2 (m.* ix ix))
-	  (iy2 (m.* iy iy))
-	  (ixiy (m.* ix iy))
-	  (gf (gaussian-filter patch-size sigma)))
-      ;; Applying the larger gaussian for each matrix
-      (let ((v-ix2 (sum (m.* ix2 gf)))
-	    (v-iy2 (sum (m.* iy2 gf)))
-	    (v-ixiy (sum (m.* ixiy gf))))
-	(let* ((result (svd 
-			[[v-ix2 v-ixiy];
-			[v-ixiy v-iy2]]))
-	       (ld-x (matrix-ref result 0))
-	       (ld-y (matrix-ref result 1)))
-	  ;; Harris Corner Detector
-	  (- (* ld-x ld-y) (* 0.06 (+ ld-x ld-y) (+ ld-x ld-y))))))))
 
-(defun rgb->grayscale (img)
-  (m./ (m.+ (m.+ (car img) (cadr img)) (caddr img)) 3))
+;; 
 
-(defun has-corner? (dog-img x y)
-  (let ((R (harris-corner-detector (rgb->grayscale (first dog-img))
-				   (rgb->grayscale (second dog-img))
-				   x y 9 2)))
-    (values (> R 1) R)))
+
+(defclass image ()
+  ((tex :initarg :tex
+	:accessor tex)
+   (mat :initarg :mat
+	:accessor mat)
+   (width :initarg :width
+	  :accessor width)
+   (height :initarg :height
+	   :accessor height)))
+
+
+(defclass landmark ()
+  ((pt1 :initarg :pt1
+	:initform nil
+	:accessor pt1)
+   (pt2 :initarg :pt2
+	:initform nil
+	:accessor pt2)
+   (color :initarg :color
+	  :accessor color))
+  (:documentation "Indicating the correspondence pair points"))
+
+
+
+
+(defun draw-landmark (i1 i2 landmark size)
+  (with-slots (pt1 pt2 color) landmark
+    (when pt1
+	(draw-point 
+	 (list (car pt1) (cadr pt1))
+	 color size))
+    (gl:translate (width i1) 0 0)
+    (when pt2
+      (draw-point 
+       (list (car pt2) (cadr pt2))
+       color size))))
+
+
+    
+      
+(defvar *cur-landmark* nil)
+(defvar *landmarks* nil)
+
+(defvar *points* nil)	 
+(defvar *homography* nil)
+
+(defvar *square-points* nil)
+(defvar *square-homography* nil)
+
+(defvar *pick-mode* t)
+
+
+
+(defun click-handler (i1 i2 x y)
+  (format t "Click: (~A,~A)~%" x y)
+
+  (if *pick-mode*
+      (progn
+
+	;; Make a new landmark
+	(when (null *cur-landmark*)
+	  (setf *cur-landmark* (make-instance 'landmark :color (rand-color))))
   
+	(if (< x (width i1))
+	    (setf (pt1 *cur-landmark*) (list x (- (height i1) y)))
+	    (setf (pt2 *cur-landmark*) (list (- x (width i1)) (- (height i1) y))))
 
+	;; When the landmark is filled, push to the list
+	(when (and (pt1 *cur-landmark*) (pt2 *cur-landmark*))
+	  (push *cur-landmark* *landmarks*)
+	  (setf *cur-landmark* nil))
+
+	;; If the points are collected, compute the homography matrix
+	(when (>= (length *landmarks*) 4)
+	  (setf *homography* (compute-homography (get-points-from-landmarks)))))
+
+      (progn
+	;; TODO : getting real point with tranform matrix.
+	(push (list (- x 1000) (- (height i1) y) 1) *square-points*)
+
+	(when (= (length *square-points*) 4)
+	  ;; Compute homography matrix
+	  (setf *square-homography*
+		(compute-homography
+		 (mapcar #'list 
+			 *square-points*
+			 '((0 0 1) (300 0 1) (300 300 1) (0 300 1)))))
+	  
+	  ;; Clear the homography matrix
+	  (setf *square-points* nil))
+
+	)))
+
+
+
+(defun make-image (img)
+  (make-instance 'image 
+		 :tex (load-texture-from-img img)
+		 :mat img
+		 :width (car (size (car img)))
+		 :height (cadr (size (car img)))))
+
+
+(defun draw-result (i1 i2)
+  (with-slots ((tex1 tex) (w1 width) (h1 height)) i1
+    (with-slots ((tex2 tex) (w2 width) (h2 height)) i2
+
+      (let ((s 1))
+	(gl:scale s s 1))
+
+      (gl:translate 1000 0 0)
+
+
+      (if *square-homography*
+	  (gl:mult-matrix *square-homography*))
+
+
+      (gl:push-matrix)
+      (gl:translate (/ w2 2) (/ h2 2) 0)
+      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1)
+      (gl:pop-matrix)
+
+
+      (when *homography* 
+	  (gl:push-matrix)
+	  (gl:mult-matrix *homography*)
+
+	  (gl:translate (/ w1 2) (/ h1 2) 0)
+	  (draw-2d-texture tex1 0 0 w1 h1 0 0 1 1 '(1 1 1 0.5))
+	  (gl:pop-matrix)))))
+
+
+
+(defun draw-pick (i1 i2)
+  (gl:push-matrix)
+  (gl:load-identity)
+
+  (with-slots ((tex1 tex) (w1 width) (h1 height)) i1
+    (with-slots ((tex2 tex) (w2 width) (h2 height)) i2
+
+      ;; Draw image 1
+      (gl:translate (/ w1 2) (/ h1 2) 0)
+      (draw-2d-texture tex1 0 0 w1 h1 0 0 1 1)
+
+
+      ;; Draw image 2
+      (gl:translate (/ w1 2) 0 0)
+      (gl:translate (/ w2 2) 0 0)
+      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1)))
+
+  (gl:pop-matrix)
+
+    ;; Draw landmarks
+  (gl:push-matrix)
+  (gl:load-identity)
+  (if *cur-landmark* 
+      (draw-landmark i1 i2 *cur-landmark* 10))
+  (gl:pop-matrix)
+
+  (dolist (l *landmarks*)
+    (gl:push-matrix)
+    (gl:load-identity)
+    (draw-landmark i1 i2 l 5)
+    (gl:pop-matrix)))
+
+      
+
+
+
+(defun draw (i1 i2)
+  (setup-draw)
+
+  ;; Draw images
+  (gl:push-matrix)
+  (gl:load-identity)
+
+  (if *pick-mode*
+      (draw-pick i1 i2)
+      (draw-result i1 i2))
+
+  (gl:pop-matrix)
+
+  (gl:flush)
+  (sdl:update-display))
+
+
+
+(defun key-handler (key)
+  (cond ((sdl:key= key :sdl-key-space) (setf *pick-mode* (not *pick-mode*)))
+	((sdl:key= key :sdl-key-escape) (clear-homography))))
+
+
+(defun get-points-from-landmarks ()
+  (setf *points* 
+	(loop for l in *landmarks* collect
+	     (list (append (pt1 l) '(1)) 
+		   (append (pt2 l) '(1))))))
+    
+
+(defun compute-homography (points)
+  (let ((H (2D->3D-transfom 
+	    (normalize-matrix (solve-homography-matrix points)))))
+    (values (3D-transform->arr H) H)))
+
+
+(defun test-homography (points)
+  (multiple-value-bind (arr H) (compute-homography points)
+    (format t "H: ~A~%" H)
+    (format t "H * 0: ~A~%" (normalize-vector (m* H [0 0 0 1]')))
+    (format t "H * 0: ~A~%" (normalize-vector (m* H [720 0 0 1]')))
+    (format t "H * 0: ~A~%" (normalize-vector (m* H [0 576 0 1]')))
+    (format t "H * 0: ~A~%" (normalize-vector (m* H [720 576 0 1]')))))
+
+
+  
+(defun clear-homography ()
+  (setf *homography* nil)
+  (setf *cur-landmark* nil)
+  (setf *landmarks* nil))
+
+
+(defun pick-image-point (img1 img2)
+  (let* ((w1 (car (size (car img1))))
+	 (h1 (cadr (size (car img1))))
+	 (w2 (car (size (car img2))))
+	 (h2 (cadr (size (car img2))))
+	 (w (+ w1 w2))
+	 (h (max h1 h2)))
+
+    (sdl:with-init ()
+      (sdl:window (+ w1 w2) (max h1 h2)
+		  :title-caption "Image"
+		  :icon-caption "Image"
+		  :opengl t
+		  :opengl-attributes '((:SDL-GL-DOUBLEBUFFER 1)))
+    
+      (setup-ortho-projection w h)
+
+      ;; Load textures
+      (let ((i1 (make-image img1))
+	    (i2 (make-image img2)))
+	       
+
+	(sdl:with-events ()
+	  (:quit-event () t)
+	  (:video-expose-event () (sdl:update-display))
+	  (:key-down-event (:key key) (key-handler key))
+	  (:mouse-button-down-event (:x x :y y) (click-handler i1 i2 x y))
+	  (:idle () (draw i1 i2) (slime-conn)))
+	
+	;; Delete textures
+	(gl:delete-textures (list (slot-value i1 'tex)
+				  (slot-value i2 'tex)))))))
