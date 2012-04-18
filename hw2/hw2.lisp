@@ -1,7 +1,3 @@
-(defpackage #:hw2
-  (:use :cl :png-read :matlisp)
-  (:shadow :real))
-
 (in-package #:hw2)
 
 (defparameter *path* "/Users/bbirec/Dropbox/Classes/vision/hw2/")
@@ -38,7 +34,7 @@
     (write-image "img2_dy.png" (first dy) (second dy) (third dy))))
   
 
-;; 
+;; Classes
 
 
 (defclass image ()
@@ -63,22 +59,6 @@
 	  :accessor color))
   (:documentation "Indicating the correspondence pair points"))
 
-
-
-
-(defun draw-landmark (i1 i2 landmark size)
-  (with-slots (pt1 pt2 color) landmark
-    (when pt1
-	(draw-point 
-	 (list (car pt1) (cadr pt1))
-	 color size))
-    (gl:translate (width i1) 0 0)
-    (when pt2
-      (draw-point 
-       (list (car pt2) (cadr pt2))
-       color size))))
-
-
     
       
 (defvar *cur-landmark* nil)
@@ -93,6 +73,132 @@
 (defvar *pick-mode* t)
 
 
+
+
+
+
+(defun make-image (img)
+  (make-instance 'image 
+		 :tex (load-texture-from-img img)
+		 :mat img
+		 :width (car (size (car img)))
+		 :height (cadr (size (car img)))))
+
+
+
+
+(defun get-points-from-landmarks ()
+  (setf *points* 
+	(loop for l in *landmarks* collect
+	     (list (append (pt1 l) '(1)) 
+		   (append (pt2 l) '(1))))))
+    
+
+(defun compute-homography (points)
+  (let ((H (2D->3D-transfom 
+	    (normalize-matrix (solve-homography-matrix points)))))
+    (values (3D-transform->arr H) H)))
+
+
+(defun test-homography (points)
+  (multiple-value-bind (arr H) (compute-homography points)
+    (format t "H: ~A~%" H)
+    (format t "H * 0: ~A~%" (normalize-vector (m* H [0 0 0 1]')))
+    (format t "H * 0: ~A~%" (normalize-vector (m* H [720 0 0 1]')))
+    (format t "H * 0: ~A~%" (normalize-vector (m* H [0 576 0 1]')))
+    (format t "H * 0: ~A~%" (normalize-vector (m* H [720 576 0 1]')))))
+
+
+  
+(defun clear-homography ()
+  (setf *homography* nil)
+  (setf *cur-landmark* nil)
+  (setf *landmarks* nil))
+
+
+;; SDL specific functions
+
+(defun draw-landmark (i1 i2 landmark size)
+  (with-slots (pt1 pt2 color) landmark
+    (when pt1
+	(draw-point 
+	 (list (car pt1) (cadr pt1))
+	 color size))
+    (gl:translate (width i1) 0 0)
+    (when pt2
+      (draw-point 
+       (list (car pt2) (cadr pt2))
+       color size))))
+
+
+
+(defun draw-result (i1 i2)
+  (with-slots ((tex1 tex) (w1 width) (h1 height)) i1
+    (with-slots ((tex2 tex) (w2 width) (h2 height)) i2
+
+      (let ((s 1))
+	(gl:scale s s 1))
+      (gl:translate 1000 0 0)
+
+      (if *square-homography*
+	  (gl:mult-matrix *square-homography*))
+
+      
+      (gl:with-pushed-matrix
+	(gl:translate (/ w2 2) (/ h2 2) 0)
+	(draw-2d-texture tex2 0 0 w2 h2 0 0 1 1))
+
+
+      (when *homography* 
+	(gl:with-pushed-matrix
+	  (gl:mult-matrix *homography*)
+
+	  (gl:translate (/ w1 2) (/ h1 2) 0)
+	  (draw-2d-texture tex1 0 0 w1 h1 0 0 1 1 '(1 1 1 0.5)))))))
+
+
+
+
+(defun draw-pick (i1 i2)
+  
+  (with-slots ((tex1 tex) (w1 width) (h1 height)) i1
+    (with-slots ((tex2 tex) (w2 width) (h2 height)) i2
+
+      (gl:with-pushed-matrix
+      ;; Draw image 1
+      (gl:translate (/ w1 2) (/ h1 2) 0)
+      (draw-2d-texture tex1 0 0 w1 h1 0 0 1 1)
+
+      ;; Draw image 2
+      (gl:translate (/ w1 2) 0 0)
+      (gl:translate (/ w2 2) 0 0)
+      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1))))
+
+  ;; Draw current landmark
+  (gl:with-pushed-matrix
+    (if *cur-landmark* 
+	(draw-landmark i1 i2 *cur-landmark* 10)))
+
+  ;; Draw landmarks
+  (dolist (l *landmarks*)
+    (gl:with-pushed-matrix
+    (draw-landmark i1 i2 l 5))))
+
+
+      
+
+
+
+(defun draw (i1 i2)
+  (setup-draw)
+
+  ;; Draw images
+  (if *pick-mode*
+      (draw-pick i1 i2)
+      (draw-result i1 i2))
+
+  (gl:flush)
+  (sdl:update-display))
 
 (defun click-handler (i1 i2 x y)
   (format t "Click: (~A,~A)~%" x y)
@@ -136,130 +242,10 @@
 
 
 
-(defun make-image (img)
-  (make-instance 'image 
-		 :tex (load-texture-from-img img)
-		 :mat img
-		 :width (car (size (car img)))
-		 :height (cadr (size (car img)))))
-
-
-(defun draw-result (i1 i2)
-  (with-slots ((tex1 tex) (w1 width) (h1 height)) i1
-    (with-slots ((tex2 tex) (w2 width) (h2 height)) i2
-
-      (let ((s 1))
-	(gl:scale s s 1))
-
-      (gl:translate 1000 0 0)
-
-
-      (if *square-homography*
-	  (gl:mult-matrix *square-homography*))
-
-
-      (gl:push-matrix)
-      (gl:translate (/ w2 2) (/ h2 2) 0)
-      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1)
-      (gl:pop-matrix)
-
-
-      (when *homography* 
-	  (gl:push-matrix)
-	  (gl:mult-matrix *homography*)
-
-	  (gl:translate (/ w1 2) (/ h1 2) 0)
-	  (draw-2d-texture tex1 0 0 w1 h1 0 0 1 1 '(1 1 1 0.5))
-	  (gl:pop-matrix)))))
-
-
-
-(defun draw-pick (i1 i2)
-  (gl:push-matrix)
-  (gl:load-identity)
-
-  (with-slots ((tex1 tex) (w1 width) (h1 height)) i1
-    (with-slots ((tex2 tex) (w2 width) (h2 height)) i2
-
-      ;; Draw image 1
-      (gl:translate (/ w1 2) (/ h1 2) 0)
-      (draw-2d-texture tex1 0 0 w1 h1 0 0 1 1)
-
-
-      ;; Draw image 2
-      (gl:translate (/ w1 2) 0 0)
-      (gl:translate (/ w2 2) 0 0)
-      (draw-2d-texture tex2 0 0 w2 h2 0 0 1 1)))
-
-  (gl:pop-matrix)
-
-    ;; Draw landmarks
-  (gl:push-matrix)
-  (gl:load-identity)
-  (if *cur-landmark* 
-      (draw-landmark i1 i2 *cur-landmark* 10))
-  (gl:pop-matrix)
-
-  (dolist (l *landmarks*)
-    (gl:push-matrix)
-    (gl:load-identity)
-    (draw-landmark i1 i2 l 5)
-    (gl:pop-matrix)))
-
-      
-
-
-
-(defun draw (i1 i2)
-  (setup-draw)
-
-  ;; Draw images
-  (gl:push-matrix)
-  (gl:load-identity)
-
-  (if *pick-mode*
-      (draw-pick i1 i2)
-      (draw-result i1 i2))
-
-  (gl:pop-matrix)
-
-  (gl:flush)
-  (sdl:update-display))
-
-
-
 (defun key-handler (key)
   (cond ((sdl:key= key :sdl-key-space) (setf *pick-mode* (not *pick-mode*)))
 	((sdl:key= key :sdl-key-escape) (clear-homography))))
 
-
-(defun get-points-from-landmarks ()
-  (setf *points* 
-	(loop for l in *landmarks* collect
-	     (list (append (pt1 l) '(1)) 
-		   (append (pt2 l) '(1))))))
-    
-
-(defun compute-homography (points)
-  (let ((H (2D->3D-transfom 
-	    (normalize-matrix (solve-homography-matrix points)))))
-    (values (3D-transform->arr H) H)))
-
-
-(defun test-homography (points)
-  (multiple-value-bind (arr H) (compute-homography points)
-    (format t "H: ~A~%" H)
-    (format t "H * 0: ~A~%" (normalize-vector (m* H [0 0 0 1]')))
-    (format t "H * 0: ~A~%" (normalize-vector (m* H [720 0 0 1]')))
-    (format t "H * 0: ~A~%" (normalize-vector (m* H [0 576 0 1]')))
-    (format t "H * 0: ~A~%" (normalize-vector (m* H [720 576 0 1]')))))
-
-
-  
-(defun clear-homography ()
-  (setf *homography* nil)
-  (setf *cur-landmark* nil)
-  (setf *landmarks* nil))
 
 
 (defun pick-image-point (img1 img2)

@@ -118,4 +118,41 @@
 	(/ (random 256) 255)
 	(/ (random 256) 255)))
 
+(defmacro with-opengl-window (caption w h &body body)
+  `(sdl:with-init ()
+     (sdl:window ,w ,h
+		 :title-caption ,caption
+		 :icon-caption ,caption
+		 :opengl t
+		 :opengl-attributes '((:SDL-GL-DOUBLEBUFFER 1)))
+     (setup-ortho-projection ,w ,h)
 
+     ,@body))
+
+(defmacro def-opengl-draw (name args &body body)
+  `(defun ,name ,args 
+     (setup-draw)
+     ,@body
+     (gl:flush)
+     (sdl:update-display)))
+
+
+(defun show-image (img)
+  (let ((w (car (size (car img))))
+	(h (cadr (size (car img)))))
+    (with-opengl-window "Image" w h
+      ;; Init
+
+      (sdl:with-events ()
+	(:quit-event () t)
+	(:video-expose-event () (sdl:update-display))
+	#+nil
+	(:key-down-event (:key key) (key-handler key))
+	#+nil
+	(:mouse-button-down-event (:x x :y y) (click-handler i1 i2 x y))
+	(:idle ()  (slime-conn)))
+
+      ;; Clear
+      )))
+
+  

@@ -1,6 +1,7 @@
 (asdf:defsystem #:hw2
   :serial t
-  :components ((:file "sdl")
+  :components ((:file "package")
+	       (:file "sdl")
 	       (:file "util")
 	       (:file "filter")
 	       (:file "corner")
