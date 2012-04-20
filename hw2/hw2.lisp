@@ -133,6 +133,7 @@
 
 
 (defun draw-result (i1 i2)
+  (gl:load-identity)
   (with-slots ((tex1 tex) (w1 width) (h1 height)) i1
     (with-slots ((tex2 tex) (w2 width) (h2 height)) i2
 
@@ -160,6 +161,7 @@
 
 
 (defun draw-pick (i1 i2)
+  (gl:load-identity)
   
   (with-slots ((tex1 tex) (w1 width) (h1 height)) i1
     (with-slots ((tex2 tex) (w2 width) (h2 height)) i2
