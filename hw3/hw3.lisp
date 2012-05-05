@@ -1,6 +1,6 @@
 
 (defpackage #:hw3
-  (:use :cl :matlisp)
+  (:use :cl :matlisp :png-read)
   (:shadow :real))
 
 (in-package #:hw3)
@@ -138,9 +138,9 @@
 	    (member p c2 :test #'p=))))
        
 
-(defun k-means (k data)
+(defun k-means (k data &optional (max-iteration 2))
   "Perform k-means clustering algorithm"
-  
+  (format t "Performing ~A-means algorithm with ~A points~%" k (length data))
   (let ((k-means nil)
 	(clusters (make-array k :initial-element nil)))
 
@@ -150,19 +150,19 @@
 	   (push (nth idx data) k-means)))
 
     ;; Iterate until convergence of k-means
-    (loop for i below 100 do
+    (loop for i below max-iteration do
+	 (format t "Iteration ~A~%" i)
+
 	 ;; Assignment step
 	 (let ((new-clusters (make-array k :initial-element nil)))
+	   ;; Warning : Performance bottleneck
 	   (loop for d in data do
 		(let ((idx (find-cluster-idx k-means d)))
 		  (push d (aref new-clusters idx))))
 
-	   (format t "New cluster: ~A~%" new-clusters)
-	   (format t "Last cluster: ~A~%" clusters)
-	   
 	   ;; Terminate if the clusters are same with the last one
 	   (if (loop for j below k always
-			(cluster= (aref clusters j) (aref new-clusters j)))
+		    (cluster= (aref clusters j) (aref new-clusters j)))
 	       (progn
 		 (format t "End of cluster~%")
 		 (return-from nil))
@@ -179,9 +179,23 @@
 			      (mapcar #'(lambda (x) (/ x len)) s))))))))
     (values clusters k-means)))
 		
-		
+
 		   
-		   
+(defun find-super-pixel (filepath)
+  (let* ((img (read-png-file filepath))
+	 (data (image-data img))
+	 (w (width img))
+	 (h (height img)))
+	 
+    (let ((d (loop for y below h append
+		  (loop for x below w collect
+		       (list x y 
+			     (aref data x y 0)
+			     (aref data x y 1)
+			     (aref data x y 2))))))
+      (mapcar #'length (coerce (time (k-means 100 d)) 'list)))))
+
+  
 	      
       
        
