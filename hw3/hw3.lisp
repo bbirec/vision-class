@@ -138,7 +138,7 @@
 	    (member p c2 :test #'p=))))
        
 
-(defun k-means (k data &optional (max-iteration 2))
+(defun k-means (k data &optional (max-iteration 100))
   "Perform k-means clustering algorithm"
   (format t "Performing ~A-means algorithm with ~A points~%" k (length data))
   (let ((k-means nil)
@@ -181,7 +181,7 @@
 		
 
 		   
-(defun find-super-pixel (filepath)
+(defun find-super-pixel (filepath pixel-count)
   (let* ((img (read-png-file filepath))
 	 (data (image-data img))
 	 (w (width img))
@@ -193,7 +193,7 @@
 			     (aref data x y 0)
 			     (aref data x y 1)
 			     (aref data x y 2))))))
-      (mapcar #'length (coerce (time (k-means 100 d)) 'list)))))
+      (mapcar #'length (coerce (time (k-means pixel-count d)) 'list)))))
 
   
 	      
