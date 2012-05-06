@@ -136,6 +136,11 @@
   (and (= (length c1) (length c2))
        (loop for p in c1 always
 	    (member p c2 :test #'p=))))
+
+(defun cluster-center (cluster)
+  (let ((len (length cluster))
+	(s (reduce #'sum-list cluster)))
+    (mapcar #'(lambda (x) (/ x len)) s)))
        
 
 (defun k-means (k data &optional (max-iteration 100))
@@ -173,10 +178,8 @@
 		 ;; Update step
 		 (setf k-means 
 		       (loop for j below k collect
-			    (let* ((cluster (aref clusters j))
-				   (len (length cluster))
-				   (s (reduce #'sum-list cluster)))
-			      (mapcar #'(lambda (x) (/ x len)) s))))))))
+			    (cluster-center (aref clusters j))))))))
+			    
     (values clusters k-means)))
 		
 
@@ -197,9 +200,57 @@
 
   
 	      
-      
-       
+;; Nomalized cut algorithm
 
+(defun weight-function (super-pixel1 super-pixel2)
+  ;; Euclidian distance of cluster center
+  (let ((center1 (cluster-center super-pixel1))
+	(center2 (cluster-center super-pixel2)))
+    (dist-2 center1 center2)))
+
+
+(defun make-affinity-matrix (super-pixels)
+  "W[i,j] = w(i,j)"
+  ;; TODO : do not repeat the calculation
+  (let* ((n (length super-pixels))
+	 (mat (make-float-matrix n n)))
+    (loop for j below n do
+       (loop for i below n do
+	    (setf (matrix-ref mat i j)
+		  (weight-function (nth i super-pixels)
+				   (nth j super-pixels)))))
+    mat))
+
+(defun sum-rows (matrix)
+  "Return a column vector with sum of row"
+  (let ((mat (make-float-matrix (number-of-rows matrix) 1)))
+    (loop for r below (number-of-rows matrix) do
+	 (setf (matrix-ref mat r)
+	       (loop for c below (number-of-cols matrix) sum
+		    (matrix-ref matrix r c))))
+    mat))
+		    
+  
+(defun make-diagonal-matrix (affinity)
+  (diag (sum-rows affinity)))
+	       
+
+(defun bipartite-matrix (W D)
+  "Getting the eigenvector with the second smallest eigenvalue. W is affinity matrix, and D is diagonal matrix."
+  (let* ((D-inv (m/ D))
+	 (A (m* D-inv (m- D W)))) ;; D^-1(D-W)y=ly
+    (multiple-value-bind (V E) (eig A :VN)
+      ;; Use the eigenvector with the second smallest eigenvalue
+      ;; This means the second column of V
+      ;; Use 0 to classify the points
+      (let ((group-a nil)
+	    (group-b nil))
+	(loop for r below (number-of-rows E) do
+	     (if (> (matrix-ref V r 1) 0)
+		 (push r group-a)
+		 (push r group-b)))
+	(list group-a group-b)))))
+	     
 
 
 		       
