@@ -143,7 +143,7 @@
     (mapcar #'(lambda (x) (/ x len)) s)))
        
 
-(defun k-means (k data &optional (max-iteration 100))
+(defun k-means (k data &optional (max-iteration 200))
   "Perform k-means clustering algorithm"
   (format t "Performing ~A-means algorithm with ~A points~%" k (length data))
   (let ((k-means nil)
@@ -181,9 +181,30 @@
 			    (cluster-center (aref clusters j))))))))
 			    
     (values clusters k-means)))
-		
 
-		   
+(defun saving-clusters (directory w h clusters)
+  (loop for cluster in clusters 
+     for i from 0 do
+       (let* ((png (make-instance 'zpng:png
+			    :color-type :truecolor
+			    :width w
+			    :height h))
+	      (image (zpng:data-array png)))
+
+	 (loop for c in cluster do
+	      (let ((x (nth 0 c))
+		    (y (nth 1 c))
+		    (r (nth 2 c))
+		    (g (nth 3 c))
+		    (b (nth 4 c)))
+		(setf (aref image y x 0) r
+		      (aref image y x 1) g
+		      (aref image y x 2) b)))
+
+	 (let ((filepath (format nil "~A/~A_~A.png" directory "output" i)))
+	   (zpng:write-png png filepath)))))
+
+
 (defun find-super-pixel (filepath pixel-count)
   (let* ((img (read-png-file filepath))
 	 (data (image-data img))
@@ -196,8 +217,13 @@
 			     (aref data x y 0)
 			     (aref data x y 1)
 			     (aref data x y 2))))))
-      (mapcar #'length (coerce (time (k-means pixel-count d)) 'list)))))
+      (let* ((clusters (coerce (time (k-means pixel-count d)) 'list))
+	     (clusters-pixel-counts (mapcar #'length clusters)))
+	(format t "Clustering: ~A~%" clusters-pixel-counts)
+	(saving-clusters "/Users/bbirec/Dropbox/Classes/vision/hw3" 
+			 w h clusters)))))
 
+	 
   
 	      
 ;; Nomalized cut algorithm
