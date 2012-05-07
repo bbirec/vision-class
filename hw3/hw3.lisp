@@ -5,6 +5,8 @@
 
 (in-package #:hw3)
 
+(defparameter *output-folder* "/Users/bbirec/Dropbox/Classes/vision/hw3")
+
 ;; RANSAC
 
 (defun find-hypothesis (points)
@@ -95,7 +97,8 @@
 	(format t "Estimated line (a b) = (~A ~A)~%" e-a e-b)
 	(format t "Error : (~A ~A)~%" 
 		(abs (- e-a a)) 
-		(abs (- e-b b)))))))
+		(abs (- e-b b)))
+	(+ (abs (- e-a a)) (abs (- e-b b)))))))
 	
 
 
@@ -213,25 +216,68 @@
 	 
     (let ((d (loop for y below h append
 		  (loop for x below w collect
-		       (list x y 
-			     (aref data x y 0)
-			     (aref data x y 1)
-			     (aref data x y 2))))))
+		       (let ((r (aref data x y 0))
+			     (g (aref data x y 1))
+			     (b (aref data x y 2)))
+			 (list x y r g b))))))
       (let* ((clusters (coerce (time (k-means pixel-count d)) 'list))
 	     (clusters-pixel-counts (mapcar #'length clusters)))
 	(format t "Clustering: ~A~%" clusters-pixel-counts)
-	(saving-clusters "/Users/bbirec/Dropbox/Classes/vision/hw3" 
-			 w h clusters)))))
+	(saving-clusters *output-folder* w h clusters)
+	clusters))))
 
 	 
   
 	      
 ;; Nomalized cut algorithm
 
+
+;; HSV
+;; http://www.cs.rit.edu/~ncs/color/t_convert.html
+(defun rgb->hsv (r g b)
+  ;; RGB is 0~1
+  (setf r (/ r 256)
+	g (/ g 256)
+	b (/ b 256))
+
+  (let* ((v (max r g b))
+	 (delta (- v (min r g b))))
+    (if (or (= v 0) (= delta 0)) ;; in case of r=g=b
+	(list -1 0 v)
+	(let ((s (/ delta v)))
+	  (flet ((get-h ()
+		   (if (= r v)
+		       (/ (- g b) delta)
+		       (if (= g v)
+			   (+ 2 (/ (- b r) delta))
+			   (+ 4 (/ (- r g) delta))))))
+	    (let ((h (* (get-h) 60)))
+	      (if (< h 0)
+		  (list (+ h 360) s v)
+		  (list h s v))))))))
+
+(defun hsv-distance (p1 p2)
+  (flet ((get-vec (h s v) 
+	   (list (* v s (cos h))
+		 (* v s (sin h))
+		 v)))
+    (let ((vec1 (apply #'get-vec p1))
+	  (vec2 (apply #'get-vec p2)))
+      ;; Square of two norm of (vec1 - vec2)
+      (reduce #'+ 
+	      (mapcar #'(lambda (x) (* x x))
+		      (mapcar #'- vec1 vec2))))))
+	    
+
+
 (defun weight-function (super-pixel1 super-pixel2)
   ;; Euclidian distance of cluster center
   (let ((center1 (cluster-center super-pixel1))
 	(center2 (cluster-center super-pixel2)))
+    (+ (dist-2 (subseq center1 0 2) (subseq center2 0 2))
+       (hsv-distance (apply #'rgb->hsv (subseq center1 2))
+		     (apply #'rgb->hsv (subseq center2 2))))
+    #+nil
     (dist-2 center1 center2)))
 
 
@@ -278,8 +324,21 @@
 	(list group-a group-b)))))
 	     
 
+(defun normalized-cut (super-pixels)
+  (let* ((W (make-affinity-matrix super-pixels))
+	 (D (make-diagonal-matrix W)))
+    (bipartite-matrix W D)))
+      
+      
+(defun normalized-cut* (super-pixels)
+  "Recursive normalized cut algorithm"
+  (if (= (length super-pixels) 0) nil)
+  (destructuring-bind (a b) (normalized-cut super-pixels)
+    (append 
+     (normalized-cut* (mapcar #'(lambda (x) (nth x super-pixels)) a))
+     (normalized-cut* (mapcar #'(lambda (x) (nth x super-pixels)) b)))))
 
-		       
+       
 
     
 
