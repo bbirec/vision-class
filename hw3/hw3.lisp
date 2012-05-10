@@ -185,7 +185,7 @@
 			    
     (values clusters k-means)))
 
-(defun saving-clusters (directory w h clusters)
+(defun saving-clusters (directory name w h clusters)
   (loop for cluster in clusters 
      for i from 0 do
        (let* ((png (make-instance 'zpng:png
@@ -204,7 +204,7 @@
 		      (aref image y x 1) g
 		      (aref image y x 2) b)))
 
-	 (let ((filepath (format nil "~A/~A_~A.png" directory "output" i)))
+	 (let ((filepath (format nil "~A/~A_~A.png" directory name i)))
 	   (zpng:write-png png filepath)))))
 
 
@@ -223,7 +223,7 @@
       (let* ((clusters (coerce (time (k-means pixel-count d)) 'list))
 	     (clusters-pixel-counts (mapcar #'length clusters)))
 	(format t "Clustering: ~A~%" clusters-pixel-counts)
-	(saving-clusters *output-folder* w h clusters)
+	(saving-clusters *output-folder* "kmeans" w h clusters)
 	clusters))))
 
 	 
@@ -318,38 +318,57 @@
 	 (A (m* D-inv (m- D W)))) ;; D^-1(D-W)y=ly
     (multiple-value-bind (V E) (eig A :VN)
       ;; Split into two groups
-      (let ((group-a nil)
-	    (group-b nil)
-	    ;; The second smallest index
-	    (idx (find-second-smallest-idx
-		  (coerce (convert-to-lisp-array (diag E)) 'list))))
+      (let* ((group-a nil)
+	     (group-b nil)
+	     ;; The second smallest index
+	     (eigenvalues (coerce (convert-to-lisp-array (diag E)) 'list))
+	     (idx (find-second-smallest-idx eigenvalues)))
 
 	(loop for r below (number-of-rows E) do
 	   ;; Use 0 to classify the points
 	     (if (> (matrix-ref V r idx) 0)
 		 (push r group-a)
 		 (push r group-b)))
-	(values (list group-a group-b))))))
+	(values (list group-a group-b)
+		(nth idx eigenvalues))))))
 
 	     
 
 (defun normalized-cut (super-pixels)
-  (let* ((W (make-affinity-matrix super-pixels))
-	 (D (make-diagonal-matrix W)))
-    (bipartite-matrix W D)))
-      
-      
+  (flet ((get-super-pixels (indices) 
+	   (mapcar #'(lambda (x) (nth x super-pixels)) indices)))
+
+    (let* ((W (make-affinity-matrix super-pixels))
+	   (D (make-diagonal-matrix W)))
+      (multiple-value-bind (groups eigenvalue) (bipartite-matrix W D)
+	(destructuring-bind (a b) groups
+	  (values 
+	   (list (get-super-pixels a)
+		 (get-super-pixels b))
+	   eigenvalue))))))
+
+
 (defun normalized-cut* (super-pixels)
-  "Recursive normalized cut algorithm"
-  (if (= (length super-pixels) 0) nil)
-  (destructuring-bind (a b) (normalized-cut super-pixels)
-    (append 
-     (normalized-cut* (mapcar #'(lambda (x) (nth x super-pixels)) a))
-     (normalized-cut* (mapcar #'(lambda (x) (nth x super-pixels)) b)))))
+  "Recursive normalized cut algorithm and return the groups of super pixels"
+  (if (< (length super-pixels) 2)
+      (list super-pixels)
+      (multiple-value-bind (sp eigenvalue) (normalized-cut super-pixels)
+	(format t "Eigenvalue : ~A~%" eigenvalue)
+	(if (< eigenvalue 1.0)
+	    ;; Split recursively
+	    (destructuring-bind (sp1 sp2) sp
+	      (append (normalized-cut* sp1)
+		      (normalized-cut* sp2)))
+
+	    ;; Stop
+	    (list super-pixels)))))
+
+(defun save-super-pixel-groups (name super-pixel-groups)
+  "Merge the mulitple super pixels as a super pixel"
+  (let ((clusters (loop for g in super-pixel-groups collect (apply #'append g))))
+    (saving-clusters *output-folder* name 120 81 clusters)))
 
        
-
-    
-
-  
-
+(defun main (filepath k)
+  (let ((sp (find-super-pixel filepath k)))
+    (save-super-pixel-groups "normalized" (normalized-cut* sp))))
