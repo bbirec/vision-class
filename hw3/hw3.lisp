@@ -306,22 +306,31 @@
 (defun make-diagonal-matrix (affinity)
   (diag (sum-rows affinity)))
 	       
+(defun find-second-smallest-idx (l)
+  "Find the index of the second smallest value"
+  (let* ((smallest (apply #'min l))
+	 (second-smallest (apply #'min (remove smallest l))))
+    (position second-smallest l)))
 
 (defun bipartite-matrix (W D)
   "Getting the eigenvector with the second smallest eigenvalue. W is affinity matrix, and D is diagonal matrix."
   (let* ((D-inv (m/ D))
 	 (A (m* D-inv (m- D W)))) ;; D^-1(D-W)y=ly
     (multiple-value-bind (V E) (eig A :VN)
-      ;; Use the eigenvector with the second smallest eigenvalue
-      ;; This means the second column of V
-      ;; Use 0 to classify the points
+      ;; Split into two groups
       (let ((group-a nil)
-	    (group-b nil))
+	    (group-b nil)
+	    ;; The second smallest index
+	    (idx (find-second-smallest-idx
+		  (coerce (convert-to-lisp-array (diag E)) 'list))))
+
 	(loop for r below (number-of-rows E) do
-	     (if (> (matrix-ref V r 1) 0)
+	   ;; Use 0 to classify the points
+	     (if (> (matrix-ref V r idx) 0)
 		 (push r group-a)
 		 (push r group-b)))
-	(list group-a group-b)))))
+	(values (list group-a group-b))))))
+
 	     
 
 (defun normalized-cut (super-pixels)
