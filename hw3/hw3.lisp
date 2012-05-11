@@ -274,11 +274,12 @@
   ;; Euclidian distance of cluster center
   (let ((center1 (cluster-center super-pixel1))
 	(center2 (cluster-center super-pixel2)))
+    #+nil
     (+ (dist-2 (subseq center1 0 2) (subseq center2 0 2))
        (hsv-distance (apply #'rgb->hsv (subseq center1 2))
 		     (apply #'rgb->hsv (subseq center2 2))))
-    #+nil
-    (dist-2 center1 center2)))
+
+    (sqrt (dist-2 center1 center2))))
 
 
 (defun make-affinity-matrix (super-pixels)
@@ -317,13 +318,13 @@
   (let* ((D-inv (m/ D))
 	 (A (m* D-inv (m- D W)))) ;; D^-1(D-W)y=ly
     (multiple-value-bind (V E) (eig A :VN)
+
       ;; Split into two groups
       (let* ((group-a nil)
 	     (group-b nil)
 	     ;; The second smallest index
 	     (eigenvalues (coerce (convert-to-lisp-array (diag E)) 'list))
 	     (idx (find-second-smallest-idx eigenvalues)))
-
 	(loop for r below (number-of-rows E) do
 	   ;; Use 0 to classify the points
 	     (if (> (matrix-ref V r idx) 0)
