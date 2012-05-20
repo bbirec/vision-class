@@ -30,6 +30,7 @@
 
 	    
 (defun hsv-distance (p1 p2)
+  "Euclidean distance of vectors in the HSV color hexcone"
   (flet ((get-vec (h s v) 
 	   (list (* v s (cos h))
 		 (* v s (sin h))
@@ -41,24 +42,48 @@
 	      (mapcar #'(lambda (x) (* x x))
 		      (mapcar #'- vec1 vec2))))))
 
+(defun gaussian-filter (size sigma)
+  "Sample the gaussian in array form."
+  (assert (oddp size))
+  (let ((matrix (make-array (list size size)))
+	(diff (floor (/ size 2))))
+    (loop for y from 0 below size do
+	 (loop for x from 0 below size do
+	      (let ((fx (- x diff))
+		    (fy (- y diff)))
+		(setf (aref matrix x y)
+		      (/ (exp (- (/ (+ (* fx fx) (* fy fy))
+				    (* 2 sigma sigma))))
+			 (* 2 pi sigma sigma))))))
+    matrix))
+
 
 (defclass a-som ()
   (matrix
    ep1
    ep2))
+
+
    
 (defclass neuronal-map ()
   ((arr :initarg :arr
 	:accessor arr)
    (n :initarg :n
-      :accessor n)))
+      :accessor n)
+   (w :initarg :w
+      :accessor w)
+   (h :initarg :h
+      :accessor h)))
+
 
 
 (defun make-neuron-map (height width n)
   (let ((dim (list (* height n) (* width n))))
     (make-instance 'neuronal-map
 		   :arr (make-array dim)
-		   :n n)))
+		   :n n
+		   :w width
+		   :h height)))
 
 (defun neuron-position (map y x i)
   "Return position in the nueral map"
@@ -81,9 +106,9 @@
     (loop for y from 0 below height do
 	 (loop for x from 0 below width do
 	      (let* ((color-idx (+ x (* width y)))
-		     (r (nth color-idx data))
-		     (g (nth (+ color-idx 1) data))
-		     (b (nth (+ color-idx 2) data))
+		     (r (aref data color-idx))
+		     (g (aref data (+ color-idx 1)))
+		     (b (aref data (+ color-idx 2)))
 		     (hsv (rgb->hsv r g b)))
 		(loop for i from 0 below (* n n) do
 		     (setf (ref-neuron map y x i) hsv)))))
@@ -99,13 +124,64 @@
 
 ;; Load the datasets
 (defun load-jpeg (path)
-  (multiple-value-bind (buffer width height comp) (jpeg:decode-image path)))
+  (multiple-value-bind (buffer width height comp) (jpeg:decode-image path)
+    buffer))
 
 
 (defparameter *ep1* 0.3) ;; Learning
 (defparameter *ep2* 0.1) ;; BS
 
-(defun find-matching ())
+(defparameter *alpha1* 0.3)
+(defparameter *alpha2* 0.1)
+
+(defun pixel-weights (map y x p)
+  "List of weight for the given pixel value"
+  (let ((n (n map)))
+    (loop for i below (* n n)
+       for w = (hsv-distance (ref-neuron map y x i) p)
+       collect w)))
+
+(defun find-matching (map y x p ep)
+  (let* ((weights (pixel-weights map y x p))
+	 (min-weight (loop for w in weights if (< w ep) minimizing w)))
+    (position min-weight weights)))
+    
+(defun alpha-function (learning-state frame total-frame)
+  (if learning-state
+      (- *alpha1* (/ (* (- *alpha1* *alpha2*) frame) total-frame))
+      *alpha2*))
+		 
+
+	 
+(defun update-adjacent-neurons (map y x i p alpha gw)
+  "Update the adjacent neurons with the new value"
+  (let ((pos (neuron-position map y x i)))
+    (loop for y from -1 to 1 append
+	 (loop for x from -1 to 1 
+	    for real-x = (+ (car pos) x)
+	    for real-y = (+ (cadr pos) y)
+	    if (and (>= real-x 0)
+		    (>= real-y 0)
+		    (< real-x (w map))
+		    (< real-y (h map)))
+	    collect (list real-x real-y)))))
+
+
+  
+
+
+(defun learning-update-map (map y x p frame total-frame)
+  (let ((i (find-matching map y x p *ep1*))
+	(alpha (alpha-function t frame total-frame)))
+    (if i
+	;; Update A
+	
+
+      
+	    
+	    
+	
+      
 
 ;; Learning
 (defun learning (img))
