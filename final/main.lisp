@@ -7,9 +7,14 @@
 ;; Implementation of adaptive SOM
 
 (defun rgb->hsv (r g b)
+  ;; RGB is 0~1
+  (setf r (/ r 256)
+	g (/ g 256)
+	b (/ b 256))
+
   (let* ((v (max r g b))
 	 (delta (- v (min r g b))))
-    (if (= v 0)
+    (if (or (= v 0) (= delta 0)) ;; in case of r=g=b
 	(list -1 0 v)
 	(let ((s (/ delta v)))
 	  (flet ((get-h ()
