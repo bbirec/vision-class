@@ -4,6 +4,11 @@
 
 (in-package #:vision-final)
 
+;; TODO
+;; HSV distance, preprocessing
+;; zeromq
+;;  
+
 ;; Implementation of adaptive SOM
 ;; http://blenderartists.org/forum/showthread.php?141258-RGB2HSV-(Convert-RGB-To-HSV)
 (defun rgb->hsv (r g b)
@@ -263,7 +268,7 @@
 			  (if (= v 0.5) 128 0))))))
     (zpng:write-png png filepath)))
   
-(defun save-result (&optional (filepath #p"/Users/bbirec/Dropbox/Classes/vision/final/output.txt"))
+(defun save-result-text (&optional (filepath #p"/Users/bbirec/Dropbox/Classes/vision/final/output.txt"))
   (let* ((w (array-dimension *result* 1))
 	 (h (array-dimension *result* 0)))
     (with-open-file (s filepath 
@@ -275,7 +280,9 @@
 		(format s "~A~C" (aref *result* y x) #\Tab))
 	   (format s "~%")))))
   
-
+(defun save-results ()
+  (save-result-image)
+  (save-result-text))
       
 
 (defun online-update-map (map y x p)
@@ -296,7 +303,10 @@
 (defparameter *highway-path* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/highway/")
 
 
-(defun run (dataset-folder)
+(defun run (dataset-folder &optional 
+	    (target-frame nil)
+	    (max-learning-frame 100)
+	    (max-online-frame 100))
   ;; train folder and test folder
   (let ((train-folder (merge-pathnames "train" dataset-folder))
 	(test-folder (merge-pathnames "test" dataset-folder)))
@@ -318,25 +328,30 @@
 	      (total-frames (- (length train-images) 1)))
 
 	  ;; Learning with the rest images of the train set.
-	  (loop for image-path in train-images 
-	       for frame from 0 below 10
-	       for data = (load-jpeg image-path) do
-	       (format t "Learning frame #~A.~%" frame)
-	       (loop for y below h do
-		    (loop for x below w do
-			 (learning-update-map map y x 
-					      (hsv-pixel data w y x)
-					      frame
-					      total-frames))))
+	  (time
+	   (loop for image-path in train-images 
+	      for frame from 0 below max-learning-frame
+	      for data = (load-jpeg image-path) do
+	      (format t "Learning frame #~A = ~A~%" frame (pathname-name image-path))
+	      (loop for y below h do
+		   (loop for x below w do
+			(learning-update-map map y x 
+					     (hsv-pixel data w y x)
+					     frame
+					     total-frames)))))
 	  
 	  ;; Online update map with test images
-	  (loop for image-path in test-images 
-	       for frame from 0 below 2
-	       for data = (load-jpeg image-path) do
-	       (format t "Performing the background subtraction for frame ~A.~%" frame)
-	       (loop for y below h do
-		    (loop for x below w do
-			 (online-update-map map y x (hsv-pixel data w y x))))))))))
+	  (time
+	   (loop for image-path in test-images 
+	      for frame from 0 below max-online-frame
+	      for data = (load-jpeg image-path) 
+	      until (and target-frame ;; Stop if the target frame is given
+			 (search (format nil "0~A" (+ target-frame 1)) 
+				 (pathname-name image-path)))
+	      do (format t "Performing the background subtraction for frame #~A = ~A~%" frame (pathname-name image-path))
+	      (loop for y below h do
+		   (loop for x below w do
+			(online-update-map map y x (hsv-pixel data w y x)))))))))))
 
       
   
