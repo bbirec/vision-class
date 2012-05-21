@@ -5,12 +5,12 @@
 (in-package #:vision-final)
 
 ;; Implementation of adaptive SOM
-
+;; http://blenderartists.org/forum/showthread.php?141258-RGB2HSV-(Convert-RGB-To-HSV)
 (defun rgb->hsv (r g b)
   ;; RGB is 0~1
-  (setf r (/ r 256)
-	g (/ g 256)
-	b (/ b 256))
+  (setf r (/ r 255)
+	g (/ g 255)
+	b (/ b 255))
 
   (let* ((v (max r g b))
 	 (delta (- v (min r g b))))
@@ -32,9 +32,10 @@
 (defun hsv-distance (p1 p2)
   "Euclidean distance of vectors in the HSV color hexcone"
   (flet ((get-vec (h s v) 
-	   (list (* v s (cos h))
-		 (* v s (sin h))
-		 v)))
+	   (let ((h-rad (* (/ h 360) 2 pi))) ;; Convert to radian value
+	     (list (* v s (cos h-rad))
+		   (* v s (sin h-rad))
+		   v))))
     (let ((vec1 (apply #'get-vec p1))
 	  (vec2 (apply #'get-vec p2)))
       ;; Square of two norm of (vec1 - vec2)
@@ -111,10 +112,10 @@
     (setf (aref (arr map) (car pos) (cadr pos)) value)))
 
 (defun hsv-pixel (data w y x)
-  (let* ((color-idx (+ x (* w y)))
-	 (r (aref data color-idx))
+  (let* ((color-idx (* 3 (+ x (* w y))))
+	 (b (aref data color-idx))
 	 (g (aref data (+ color-idx 1)))
-	 (b (aref data (+ color-idx 2)))
+	 (r (aref data (+ color-idx 2)))
 	 (hsv (rgb->hsv r g b)))
     hsv))
 
@@ -142,6 +143,27 @@
 (defun load-jpeg (path)
   (jpeg:decode-image path))
 
+(defun jpeg->png (jpeg-path png-path)
+  (multiple-value-bind (b h w c) (load-jpeg jpeg-path)
+    (assert (= c 3))
+    (let* ((png (make-instance 'zpng:png
+			       :color-type :truecolor
+			       :width w
+			       :height h))
+	   (image (zpng:data-array png)))
+      (loop for y below h do
+	   (loop for x below w do
+		(let ((idx (* c (+ x (* w y)))))
+		  (setf (aref image y x 0) ;; R
+			(aref b (+ idx 2))
+			(aref image y x 1) ;; G
+			(aref b (+ idx 1))
+			(aref image y x 2) ;; B
+			(aref b idx)))))
+      (zpng:write-png png png-path))))
+			       
+	     
+
 
 (defparameter *ep1* 0.3) ;; Learning
 (defparameter *ep2* 0.1) ;; BS
@@ -150,19 +172,21 @@
 (defparameter *alpha2* 0.1)
 
 ;; Shadow detection parameters
-(defparameter *gamma-v* 0.001)
-(defparameter *beta-v* 0.1)
-(defparameter *tau-s* 0.001)
-(defparameter *tau-h* 0.001)
+(defparameter *gamma-v* 0.7)
+(defparameter *beta-v* 1.0)
+(defparameter *tau-s* 0.1)
+(defparameter *tau-h* 10)
 
 (defun shadow-p (p c)
   (destructuring-bind (p-h p-s p-v) p
     (destructuring-bind (c-h c-s c-v) c
-      (and (let ((v (/ p-v c-v)))
-	     (and (<= *gamma-v* v)
-		  (<= v *beta-v*)))
-	   (<= (- p-s c-s) *tau-s*)
-	   (<= (abs (- p-h c-h)) *tau-h*)))))
+      (if (= c-v 0) 
+	  nil
+	  (and (let ((v (/ p-v c-v)))
+		 (and (<= *gamma-v* v)
+		      (<= v *beta-v*)))
+	       (<= (- p-s c-s) *tau-s*)
+	       (<= (abs (- p-h c-h)) *tau-h*))))))
 
 
 (defun pixel-weights (map y x p)
@@ -222,6 +246,23 @@
   ;; 0 for background
   (setf (aref *result* y x) value))
 
+(defun save-result-image (&optional (filepath #p"/Users/bbirec/Dropbox/Classes/vision/final/output.png"))
+  (let* ((w (array-dimension *result* 1))
+	 (h (array-dimension *result* 0))
+	 (png (make-instance 'zpng:png
+			     :color-type :grayscale
+			     :width w
+			     :height h))
+	 (image (zpng:data-array png)))
+    (loop for y below h do
+	 (loop for x below w do
+	      (setf (aref image y x 0)
+		    (if (= (aref *result* y x) 1) 255 0))))
+    (zpng:write-png png filepath)))
+  
+(defun save-result (filepath))
+  
+
       
 
 (defun online-update-map (map y x p)
@@ -249,7 +290,7 @@
 	  (test-images (cl-fad:list-directory test-folder)))
 
       ;; Load the first image in the train images to init the result buffer.
-      (multiple-value-bind (b w h c) (load-jpeg (car train-images))
+      (multiple-value-bind (b h w c) (load-jpeg (car train-images))
 	(assert (= c 3))
 
 	(format t "Found ~A train images and ~A test images.~%"
@@ -264,7 +305,7 @@
 
 	  ;; Learning with the rest images of the train set.
 	  (loop for image-path in train-images 
-	       for frame from 0
+	       for frame from 0 below 10
 	       for data = (load-jpeg image-path) do
 	       (format t "Learning frame #~A.~%" frame)
 	       (loop for y below h do
@@ -277,7 +318,9 @@
 	  ;; Online update map with test images
 	  #+nil
 	  (loop for image-path in test-images 
+	       for frame from 0
 	       for data = (load-jpeg image-path) do
+	       (format t "Performing the background subtraction for frame ~A.~%" frame)
 	       (loop for y below h do
 		    (loop for x below w do
 			 (online-update-map map y x (hsv-pixel data w y x))))))))))
