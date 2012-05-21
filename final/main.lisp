@@ -15,7 +15,7 @@
   (let* ((v (max r g b))
 	 (delta (- v (min r g b))))
     (if (or (= v 0) (= delta 0)) ;; in case of r=g=b
-	(list -1 0 v)
+	(list 0 0 v) ;; Invalid case h=0
 	(let ((s (/ delta v)))
 	  (flet ((get-h ()
 		   (if (= r v)
@@ -181,7 +181,7 @@
   (destructuring-bind (p-h p-s p-v) p
     (destructuring-bind (c-h c-s c-v) c
       (if (= c-v 0) 
-	  nil
+	  nil ;; Invalid case
 	  (and (let ((v (/ p-v c-v)))
 		 (and (<= *gamma-v* v)
 		      (<= v *beta-v*)))
@@ -316,9 +316,8 @@
 					      total-frames))))
 	  
 	  ;; Online update map with test images
-	  #+nil
 	  (loop for image-path in test-images 
-	       for frame from 0
+	       for frame from 0 below 10
 	       for data = (load-jpeg image-path) do
 	       (format t "Performing the background subtraction for frame ~A.~%" frame)
 	       (loop for y below h do
