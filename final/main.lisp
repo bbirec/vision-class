@@ -257,10 +257,23 @@
     (loop for y below h do
 	 (loop for x below w do
 	      (setf (aref image y x 0)
-		    (if (= (aref *result* y x) 1) 255 0))))
+		    (let ((v (aref *result* y x)))
+		      (if (= v 1) 
+			  255 
+			  (if (= v 0.5) 128 0))))))
     (zpng:write-png png filepath)))
   
-(defun save-result (filepath))
+(defun save-result (&optional (filepath #p"/Users/bbirec/Dropbox/Classes/vision/final/output.txt"))
+  (let* ((w (array-dimension *result* 1))
+	 (h (array-dimension *result* 0)))
+    (with-open-file (s filepath 
+		       :direction :output
+		       :if-exists :supersede
+		       :if-does-not-exist :create)
+      (loop for y below h do
+	   (loop for x below w do
+		(format s "~A~C" (aref *result* y x) #\Tab))
+	   (format s "~%")))))
   
 
       
@@ -274,12 +287,13 @@
 	  (update-adjacent-neurons map y x i p alpha))
 	(if (find-shadow map y x p)
 	    ;; Background
-	    (set-result y x 0)
+	    (set-result y x 0.5)
 	    ;; Foreground
 	    (set-result y x 1)))))
 	    
 
 (defparameter *boats-path* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/boats/")
+(defparameter *highway-path* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/highway/")
 
 
 (defun run (dataset-folder)
@@ -317,7 +331,7 @@
 	  
 	  ;; Online update map with test images
 	  (loop for image-path in test-images 
-	       for frame from 0 below 10
+	       for frame from 0 below 2
 	       for data = (load-jpeg image-path) do
 	       (format t "Performing the background subtraction for frame ~A.~%" frame)
 	       (loop for y below h do
