@@ -24,6 +24,22 @@
 				     :unsigned-char i))))
     pixels))
 
+;; Histogram
+(defparameter *histogram-size* 10)
+(defun histogram (pixels)
+  (let ((divider (/ 256 *histogram-size*))
+	(h (make-array *histogram-size*)))
+    (loop for p in pixels do
+	 (let ((idx (floor (/ p divider))))
+	   (setf (aref h idx)
+		 (+ (aref h idx) 1))))
+    (coerce h 'list)))
+	 
+(defun histogram-rect (image-pixel-arr image-width x y w h)
+  (histogram 
+   (loop for j from y below (+ y h) append
+	(loop for i from x below (+ x w) collect
+	     (aref image-pixel-arr (+ (* image-width j) i))))))
 
 (defun main ()
   (sdl:load-library)
