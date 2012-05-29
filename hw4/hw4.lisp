@@ -4,6 +4,9 @@
 
 (in-package #:hw4)
 
+(defparameter *particle-size* 100)
+(defparameter *histogram-size* 10)
+
 ;; Load PGM images using lispbuilder-sdl-image
 
 (defvar *bmp-path* #p"/Users/bbirec/Dropbox/Classes/vision/hw4/")
@@ -25,7 +28,6 @@
     pixels))
 
 ;; Histogram
-(defparameter *histogram-size* 10)
 (defun histogram (pixels)
   (let ((divider (/ 256 *histogram-size*))
 	(h (make-array *histogram-size*)))
@@ -40,6 +42,39 @@
    (loop for j from y below (+ y h) append
 	(loop for i from x below (+ x w) collect
 	     (aref image-pixel-arr (+ (* image-width j) i))))))
+
+
+
+(defvar *ref-histogram* nil)
+(defparameter *histogram-lambda* 20)
+
+(defun distance-histogram (h1 h2)
+  (assert (= (length h1) (length h2)))
+  (exp 
+   (reduce #'+ 
+	   (mapcar #'(lambda (x y) (* (sqrt (* x y)) *histogram-lambda*))
+		   h1 h2))))
+
+
+;; Gaussian Sampling
+(defun gaussian-filter (size sigma)
+  "Sample the gaussian in array form."
+  (assert (oddp size))
+  (let ((matrix (make-array size))
+	(diff (floor (/ size 2))))
+    (loop for x from 0 below size do
+	 (let ((fx (- x diff)))
+	   (setf (aref matrix x)
+		 (/ (exp (- (/ (* fx fx)
+			       (* 2 sigma sigma))))
+		    (sqrt (* 2 pi sigma sigma))))))
+    ;; Normalize
+    (let* ((samples (coerce matrix 'list))
+	   (total (reduce #'+ samples)))
+      (mapcar #'(lambda (x) (/ x total))
+	      samples))))
+	   
+
 
 (defun main ()
   (sdl:load-library)
