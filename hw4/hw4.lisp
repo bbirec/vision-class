@@ -157,8 +157,9 @@
 	(mapcar #'min (cadr rect) (cadr bound))))
 
 (defun r-area (r)
-  (multiple-value-bind (w h) (r-size r)
-    (* w h)))
+  (if (null r) 0
+      (multiple-value-bind (w h) (r-size r)
+	(* w h))))
 
 (defun r-intersection (r1 r2)
   (destructuring-bind ((l1 t1) (r1 b1)) r1
@@ -305,6 +306,8 @@
     ;; libraries to be preloaded to speed subsequent
     ;; loading of these images.
     (sdl-image:init-image :jpg :png :tif)
+
+    (init)
 
     ;; Load the ground truth
     (load-ground-truth)
