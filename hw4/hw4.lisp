@@ -119,6 +119,59 @@
 	    (loop for dx in bounds3
 	       for dy in bounds4 collect
 	       (list (+ (car lr) dx) (+ (cadr lr) dy))))))
+
+(defun rect-center (rect)
+  (let ((ul (car rect))
+	(lr (cadr rect)))
+    (list (/ (+ (car ul) (car lr)) 2)
+	  (/ (+ (cadr ul) (cadr lr)) 2))))
+
+(defun r-size (rect)
+  (let ((ul (car rect))
+	(lr (cadr rect)))
+    (values (- (car lr) (car ul))
+	    (- (cadr lr) (cadr ul)))))
+
+(defun r-scale (rect xs ys)
+  (multiple-value-bind (w h) (r-size rect)
+    (let ((ul (car rect))
+	  (lr (cadr rect))
+	  (dy (floor (* (- ys 1) h)))
+	  (dx (floor (* (- xs 1) w))))
+      (list (list (- (car ul) dx)
+		  (- (cadr ul) dy))
+	    (list (+ (car lr) dx)
+		  (+ (cadr lr) dy))))))
+      
+
+(defun r-move (rect dx dy)
+  (let ((ul (car rect))
+	(lr (cadr rect)))
+    (list (list (+ (car ul) dx)
+		(+ (cadr ul) dy))
+	  (list (+ (car lr) dx)
+		(+ (cadr lr) dy)))))
+
+(defun r-bound (rect bound)
+  (list (mapcar #'max (car rect) (car bound))
+	(mapcar #'min (cadr rect) (cadr bound))))
+
+(defun random-rect (rect diff)
+  (let* ((bounds1 (seqrnd (gaussian-random-bound diff)))
+	 (bounds2 (seqrnd (gaussian-random-bound diff)))
+	 (bounds3 (seqrnd 
+		   (mapcar #'(lambda (x) (+ 1 (/ x (* diff 2))))
+			   (gaussian-random-bound diff)))))
+    (loop for dx in bounds1 
+	 for dy in bounds2
+	 for s in bounds3 collect
+	 (r-bound (r-scale (r-move rect dx dy) s s)
+		  '((0 0) (720 480))))))
+	 
+    
+    
+    
+	 
     
 (defvar *ref-rect* nil)
 (defvar *cur-rect* nil)
@@ -168,7 +221,7 @@
   (load-image *image-idx*)
 
   ;; Generate the next rect
-  (setf *random-rects* (random-rect-with-gaussian *cur-rect* 50))
+  (setf *random-rects* (random-rect *cur-rect* 50))
   
   ;; set rect
   (push *cur-rect* *rects*)
