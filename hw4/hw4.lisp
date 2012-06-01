@@ -5,7 +5,7 @@
 (in-package #:hw4)
 
 (defparameter *particle-size* 100)
-(defparameter *histogram-size* 10)
+(defparameter *histogram-size* 20)
 
 ;; Load PGM images using lispbuilder-sdl-image
 
@@ -156,6 +156,23 @@
   (list (mapcar #'max (car rect) (car bound))
 	(mapcar #'min (cadr rect) (cadr bound))))
 
+(defun r-area (r)
+  (multiple-value-bind (w h) (r-size r)
+    (* w h)))
+
+(defun r-intersection (r1 r2)
+  (destructuring-bind ((l1 t1) (r1 b1)) r1
+    (destructuring-bind ((l2 t2) (r2 b2)) r2
+      (if (not (or (> l2 r1)
+		   (< r2 l1)
+		   (> t2 b1)
+		   (< b2 t1)))
+	  (make-rect (max l1 l2)
+		     (max t1 t2)
+		     (min r1 r2)
+		     (min b1 b2))
+	  nil))))
+
 (defun random-rect (rect diff)
   (let* ((bounds1 (seqrnd (gaussian-random-bound diff)))
 	 (bounds2 (seqrnd (gaussian-random-bound diff)))
@@ -236,7 +253,14 @@
   (let ((hs (loop for r in *random-rects* collect
 		 (distance-histogram *ref-histogram*
 				     (histogram-rect *image-pixels* 720 r)))))
-    (setf *cur-rect* (nth (position (reduce #'max hs) hs) *random-rects*))))
+    (setf *cur-rect* (nth (position (reduce #'max hs) hs) *random-rects*)))
+
+  ;; Calculate the overlapping ratio
+  (let ((tr (nth *image-idx* *ground-truth*)))
+    (format t "Overlapping ratio: ~3$%~%"
+	    (* (/ (r-area (r-intersection tr *cur-rect*))
+		  (r-area *cur-rect*))
+	       100))))
     
 
 (defun init ()
@@ -259,7 +283,7 @@
             while number collect number))))
 
 (defun make-rect (x1 y1 x2 y2)
-  (list (list x1 y1) (list x2 y2)))
+  (list (list y1 x1) (list y2 x2)))
 
 (defun load-ground-truth ()
   (setf *ground-truth*
@@ -268,6 +292,8 @@
 	     until (eq line 'eof)
 	     collect (apply #'make-rect (parse-string-to-floats line))))))
 
+  
+  
 
 (defun main ()
   (sdl:load-library)
