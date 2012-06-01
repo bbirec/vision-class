@@ -190,6 +190,9 @@
 (defvar *image* nil)
 (defvar *image-pixels* nil)
 
+(defparameter *ground-truth* nil)
+
+
 (defun load-image (idx)
   (setf *image-idx* idx
 	*image* (sdl-image:load-image (nth idx *image-paths*))
@@ -212,7 +215,10 @@
 
   ;; Draw current rect
   (when *cur-rect* 
-    (draw-rect *cur-rect* sdl:*white*)))
+    (draw-rect *cur-rect* sdl:*white*))
+
+  ;; Draw the ground truth
+  (draw-rect (nth *image-idx* *ground-truth*) sdl:*red*))
   
 
 (defun load-next-image ()
@@ -246,6 +252,23 @@
  
 
 
+(defun parse-string-to-floats (string)
+  (let ((*read-eval* nil))
+    (with-input-from-string (stream string)
+      (loop for number = (read stream nil nil)
+            while number collect number))))
+
+(defun make-rect (x1 y1 x2 y2)
+  (list (list x1 y1) (list x2 y2)))
+
+(defun load-ground-truth ()
+  (setf *ground-truth*
+	(with-open-file (s "/Users/bbirec/Dropbox/Classes/vision/hw4/dudek_gt.txt")
+	  (loop for line = (read-line s nil 'eof)
+	     until (eq line 'eof)
+	     collect (apply #'make-rect (parse-string-to-floats line))))))
+
+
 (defun main ()
   (sdl:load-library)
   (sdl:with-init ()
@@ -257,9 +280,12 @@
     ;; loading of these images.
     (sdl-image:init-image :jpg :png :tif)
 
+    ;; Load the ground truth
+    (load-ground-truth)
+
     ;; Load image pathnames
     (let ((images (cl-fad:list-directory 
-		  "/Users/bbirec/Dropbox/Classes/vision/hw4/DudekSeq/")))
+		   "/Users/bbirec/Dropbox/Classes/vision/hw4/DudekSeq/")))
       (setf *image-paths* images
 	    *image-idx* 0
 	    *image* nil
