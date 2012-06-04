@@ -20,7 +20,8 @@
 
     (sdl-base::with-pixel (pix (sdl:fp surface))
       ;; Support only 1 bpp image
-      (assert (= 1 (sdl-base::pixel-bpp pix)))
+      ;(assert (= 1 (sdl-base::pixel-bpp pix)))
+      
       (loop for i below (* w h) do
 	   (setf (aref pixels i) 
 		 (sdl-base::mem-aref (sdl-base::pixel-data pix) 
@@ -183,7 +184,7 @@
     (loop for dx in bounds1 
 	 for dy in bounds2
 	 for s in bounds3 collect
-	 (r-bound (r-scale (r-move rect dx dy) s s)
+	 (r-bound (r-scale (r-move rect dx dy) 1 1)
 		  '((0 0) (720 480))))))
 	 
     
@@ -210,6 +211,8 @@
 
 (defparameter *ground-truth* nil)
 
+(defvar *auto-load* nil)
+(defvar *overlapping-ratio* nil)
 
 (defun load-image (idx)
   (setf *image-idx* idx
@@ -240,28 +243,30 @@
   
 
 (defun load-next-image ()
-  (setf *image-idx* (+ 1 *image-idx*))
-  (format t "Load ~A image.~%" *image-idx*)
-  (load-image *image-idx*)
+  (when (< *image-idx* (- (length *image-paths*) 1))
+    (setf *image-idx* (+ 1 *image-idx*))
+    (format t "Load ~A image.~%" *image-idx*)
+    (load-image *image-idx*)
 
-  ;; Generate the next rect
-  (setf *random-rects* (random-rect *cur-rect* 50))
+    ;; Generate the next rect
+    (setf *random-rects* (random-rect *cur-rect* 50))
   
-  ;; set rect
-  (push *cur-rect* *rects*)
+    ;; set rect
+    (push *cur-rect* *rects*)
 
-  ;; Find best rect
-  (let ((hs (loop for r in *random-rects* collect
-		 (distance-histogram *ref-histogram*
-				     (histogram-rect *image-pixels* 720 r)))))
-    (setf *cur-rect* (nth (position (reduce #'max hs) hs) *random-rects*)))
+    ;; Find best rect
+    (let ((hs (loop for r in *random-rects* collect
+		   (distance-histogram *ref-histogram*
+				       (histogram-rect *image-pixels* 720 r)))))
+      (setf *cur-rect* (nth (position (reduce #'max hs) hs) *random-rects*)))
 
-  ;; Calculate the overlapping ratio
-  (let ((tr (nth *image-idx* *ground-truth*)))
-    (format t "Overlapping ratio: ~3$%~%"
-	    (* (/ (r-area (r-intersection tr *cur-rect*))
-		  (r-area *cur-rect*))
-	       100))))
+    ;; Calculate the overlapping ratio
+    (let* ((tr (nth *image-idx* *ground-truth*))
+	   (ratio (* (/ (r-area (r-intersection tr *cur-rect*))
+		    (r-area *cur-rect*))
+		 100)))
+      (setf *overlapping-ratio* (append *overlapping-ratio* (list ratio)))
+      (format t "Overlapping ratio: ~3$%~%" ratio))))
     
 
 (defun init ()
@@ -273,7 +278,9 @@
 	*cur-rect* nil
 	*cur-position* nil
 	*rects* nil
-	*random-rects* nil))
+	*random-rects* nil
+	*auto-load* nil
+	*overlapping-ratio* nil))
  
 
 
@@ -294,6 +301,7 @@
 	     collect (apply #'make-rect (parse-string-to-floats line))))))
 
   
+
   
 
 (defun main ()
@@ -314,7 +322,7 @@
 
     ;; Load image pathnames
     (let ((images (cl-fad:list-directory 
-		   "/Users/bbirec/Dropbox/Classes/vision/hw4/DudekSeq/")))
+		   "/Users/bbirec/Dropbox/Classes/vision/hw4/data/")))
       (setf *image-paths* images
 	    *image-idx* 0
 	    *image* nil
@@ -336,7 +344,10 @@
 			   (sdl:push-quit-event))
 		       (if (sdl:key= key :SDL-KEY-SPACE)
 			   ;; Load next image
-			   (load-next-image)))
+			   (load-next-image))
+		       (if (sdl:key= key :SDL-KEY-RETURN)
+			   ;; Load next image continuously
+			   (setf *auto-load* t)))
 
       (:mouse-button-down-event (:x x :y y)
 				(when (null *ref-rect*)
@@ -360,6 +371,10 @@
 
       (:idle ()
 	     (sdl:clear-display sdl:*black*)
+	     
+	     (if *auto-load*
+		 (load-next-image))
+	     
 	     (draw)
 	     (sdl:update-display))
 
