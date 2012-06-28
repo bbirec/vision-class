@@ -4,11 +4,6 @@
 
 (in-package #:vision-final)
 
-;; TODO
-;; HSV distance, preprocessing
-;; zeromq
-;;  
-
 ;; Implementation of adaptive SOM
 ;; http://blenderartists.org/forum/showthread.php?141258-RGB2HSV-(Convert-RGB-To-HSV)
 (defun rgb->hsv (r g b)
@@ -68,13 +63,6 @@
 				    (* 2 sigma sigma))))
 			 (* 2 pi sigma sigma))))))
     matrix))
-
-
-(defclass a-som ()
-  (matrix
-   ep1
-   ep2))
-
 
 
 (defclass neuronal-map ()
@@ -299,17 +287,20 @@
 	    (set-result y x 1)))))
 	    
 
-(defparameter *boats-path* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/boats/")
 (defparameter *highway-path* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/highway/")
+(defparameter *pets* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/PETS2006/")
+(defparameter *boats-path* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/boats/")
 
+(defparameter *boulevard* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/boulevard/")
+(defparameter *cubicle* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/cubicle/")
 
 (defun run (dataset-folder &optional 
 	    (target-frame nil)
-	    (max-learning-frame 100)
-	    (max-online-frame 100))
+	    (max-learning-frame 150)
+	    (max-online-frame 150))
   ;; train folder and test folder
   (let ((train-folder (merge-pathnames "train" dataset-folder))
-	(test-folder (merge-pathnames "test" dataset-folder)))
+	(test-folder (merge-pathnames "test2" dataset-folder)))
     (let ((train-images (cl-fad:list-directory train-folder))
 	  (test-images (cl-fad:list-directory test-folder)))
 
@@ -355,4 +346,3 @@
 
       
   
-		 
