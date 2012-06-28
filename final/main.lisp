@@ -1,10 +1,40 @@
+;; Implementation of
+;; A Self-Organizing Approach to Background Subtraction for Visual Surveillance Applications
+
 
 (defpackage #:vision-final
   (:use :cl :cl-fad))
 
 (in-package #:vision-final)
 
-;; Implementation of adaptive SOM
+
+;; Input image path
+(defparameter *highway-path* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/highway/")
+(defparameter *pets* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/PETS2006/")
+(defparameter *boats-path* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/boats/")
+
+(defparameter *boulevard* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/boulevard/")
+(defparameter *cubicle* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/cubicle/")
+
+(defparameter *ep1* 0.3) ;; Learning
+(defparameter *ep2* 0.1) ;; BS
+
+(defparameter *alpha1* 0.3)
+(defparameter *alpha2* 0.1)
+
+;; Shadow detection parameters
+(defparameter *gamma-v* 0.7)
+(defparameter *beta-v* 1.0)
+(defparameter *tau-s* 0.1)
+(defparameter *tau-h* 10)
+
+(defparameter *gaussian-sigma* 1)
+
+;; Global variables
+(defvar *map* nil)
+(defvar *result* nil)
+
+
 ;; http://blenderartists.org/forum/showthread.php?141258-RGB2HSV-(Convert-RGB-To-HSV)
 (defun rgb->hsv (r g b)
   ;; RGB is 0~1
@@ -28,7 +58,6 @@
 		  (list (+ h 360) s v)
 		  (list h s v))))))))
 
-	    
 (defun hsv-distance (p1 p2)
   "Euclidean distance of vectors in the HSV color hexcone"
   (flet ((get-vec (h s v) 
@@ -77,7 +106,6 @@
    (gaussian :initarg :gaussian
 	     :accessor gaussian)))
 
-(defparameter *gaussian-sigma* 1)
 
 (defun make-neuron-map (height width n)
   (let ((dim (list (* height n) (* width n))))
@@ -112,7 +140,6 @@
 	 (hsv (rgb->hsv r g b)))
     hsv))
 
-(defvar *map* nil)
 (defun init-model (width height n data)
   (let ((map (make-neuron-map height width n)))
     (loop for y from 0 below height do
@@ -158,17 +185,6 @@
 	     
 
 
-(defparameter *ep1* 0.3) ;; Learning
-(defparameter *ep2* 0.1) ;; BS
-
-(defparameter *alpha1* 0.3)
-(defparameter *alpha2* 0.1)
-
-;; Shadow detection parameters
-(defparameter *gamma-v* 0.7)
-(defparameter *beta-v* 1.0)
-(defparameter *tau-s* 0.1)
-(defparameter *tau-h* 10)
 
 (defun shadow-p (p c)
   (destructuring-bind (p-h p-s p-v) p
@@ -222,16 +238,31 @@
 		       (hsv* g-alpha p))))))))
 		       
 
-
+;; Update function for learning phase
 (defun learning-update-map (map y x p frame total-frame)
   (let ((i (find-matching map y x p *ep1*))
+	;; Decreasing alpha along the frame index
 	(alpha (- *alpha1* (/ (* (- *alpha1* *alpha2*) frame) total-frame))))
     (if i
 	;; Update A
 	(update-adjacent-neurons map y x i p alpha))))
 
+;; Update function for BS phase
+(defun online-update-map (map y x p)
+  (let ((i (find-matching map y x p *ep2*))
+	(alpha *alpha2*))
+    (if i
+	(progn
+	  (set-result y x 0)
+	  (update-adjacent-neurons map y x i p alpha))
+	(if (find-shadow map y x p)
+	    ;; Background
+	    (set-result y x 0.5)
+	    ;; Foreground
+	    (set-result y x 1)))))
+
+
 ;; Result
-(defvar *result* nil)
 (defun init-result (w h)
   (setf *result* (make-array (list h w))))
 (defun set-result (y x value)
@@ -273,26 +304,8 @@
   (save-result-text))
       
 
-(defun online-update-map (map y x p)
-  (let ((i (find-matching map y x p *ep2*))
-	(alpha *alpha2*))
-    (if i
-	(progn
-	  (set-result y x 0)
-	  (update-adjacent-neurons map y x i p alpha))
-	(if (find-shadow map y x p)
-	    ;; Background
-	    (set-result y x 0.5)
-	    ;; Foreground
-	    (set-result y x 1)))))
 	    
 
-(defparameter *highway-path* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/highway/")
-(defparameter *pets* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/PETS2006/")
-(defparameter *boats-path* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/boats/")
-
-(defparameter *boulevard* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/boulevard/")
-(defparameter *cubicle* #p"/Users/bbirec/Dropbox/Classes/vision/final/dataset/cubicle/")
 
 (defun run (dataset-folder &optional 
 	    (target-frame nil)
